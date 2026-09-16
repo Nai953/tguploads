@@ -6,11 +6,11 @@
       "name": "Team Thunder Admin",
       "role": "admin",
       "planId": "plan_pro",
-      "usedStorageBytes": 153435467,
+      "usedStorageBytes": 183865,
       "createdAt": "2026-09-15T15:43:16.974Z",
       "isSuspended": false,
-      "passwordHash": "c905cd035d6c5c3e9a5cf23af2baa5ae754adffe5414eea6e8eec48d1de4becdc53edd7321c0d100bafcf1b36d19c6b295c1dbde914d73c11e5d38f3625a0d30",
-      "salt": "deb04a696ff8952cc4d2ffcb0ebcfb67"
+      "passwordHash": "d00d221341f790f3cfb97baa68d57ef664a88e489bdf0175ff565df588797502d95f64847f0635339ccb98c3c85522409271dd753c43c369f61be08a71f58d8a",
+      "salt": "b0e66d18833a84a6c561b7818f26d8e2"
     },
     {
       "id": "usr_9dc766c73563eeac",
@@ -23,6 +23,20 @@
       "isSuspended": false,
       "passwordHash": "3dbdfe47f2e9313f48a68450d23d19dc55c157b1d903341ac4ae66771738b53df1fffcf85c693600c09d3a442c4da2c86bcb655bafcfabd4d2ac51da980d2b99",
       "salt": "33093c3fd1f16c93b4edfaf12127e26d"
+    },
+    {
+      "id": "usr_6dae2b084dde0eac",
+      "email": "freefiregtamcpe@gmail.com",
+      "name": "freefire",
+      "role": "user",
+      "planId": "plan_pro",
+      "usedStorageBytes": 6269,
+      "createdAt": "2026-09-16T14:12:45.116Z",
+      "isSuspended": false,
+      "passwordHash": "51b0f9ed13ade95c66eb8f26c4eafa91c22a6af8ea04b1917d3b1b8e548786eab25858f3e123e6923adde2a9218b950317fef07738860b13265de063a1e490bb",
+      "salt": "d4617f7c04c7f28c05172959df610ac5",
+      "planExpiresAt": "2026-11-15T14:18:29.400Z",
+      "planCycle": "monthly"
     }
   ],
   "plans": [
@@ -106,23 +120,24 @@
   ],
   "files": [
     {
-      "id": "file_tg_58",
-      "shareToken": "9HFSk4m6",
-      "originalName": "2658_photo.jpg",
-      "storedFileName": "58",
-      "tgFileId": 58,
+      "id": "file_846df8e888acc4cd",
+      "shareToken": "AtxVjf5e",
+      "originalName": "thundercoin-faucet.zip",
+      "storedFileName": "60",
+      "tgFileId": 60,
       "folderId": "f238f42e85004475",
-      "mimeType": "image/jpeg",
-      "sizeBytes": 7462,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-15T16:07:25.000Z",
+      "filePath": "/app/applet/uploads/1789569195112-dd991b7be46f70b8.zip",
+      "mimeType": "application/zip",
+      "sizeBytes": 6269,
+      "uploadedBy": "usr_6dae2b084dde0eac",
+      "uploaderEmail": "freefiregtamcpe@gmail.com",
+      "uploaderName": "freefire",
+      "createdAt": "2026-09-16T14:33:17.728Z",
       "expiresAt": null,
-      "downloadCount": 0,
+      "downloadCount": 1,
       "isPasswordProtected": false,
       "hasDirectLink": true,
-      "description": "Uploaded via TG Uploads by Team Thunder Admin"
+      "description": ""
     },
     {
       "id": "file_d2663b43b0121019",
@@ -145,101 +160,6 @@
       "description": ""
     },
     {
-      "id": "file_tg_48",
-      "shareToken": "0Cxm0KdT",
-      "originalName": "VID-20260905-WA0004.mp4",
-      "storedFileName": "48",
-      "tgFileId": 48,
-      "folderId": "f238f42e85004475",
-      "mimeType": "video/mp4",
-      "sizeBytes": 45174910,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-13T09:45:24.000Z",
-      "expiresAt": null,
-      "downloadCount": 1,
-      "isPasswordProtected": false,
-      "hasDirectLink": true,
-      "description": ""
-    },
-    {
-      "id": "file_tg_49",
-      "shareToken": "TXwgqX2f",
-      "originalName": "VID-20260905-WA0002.mp4",
-      "storedFileName": "49",
-      "tgFileId": 49,
-      "folderId": "f238f42e85004475",
-      "mimeType": "video/mp4",
-      "sizeBytes": 20659934,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-13T09:45:49.000Z",
-      "expiresAt": null,
-      "downloadCount": 0,
-      "isPasswordProtected": false,
-      "hasDirectLink": true,
-      "description": ""
-    },
-    {
-      "id": "file_tg_50",
-      "shareToken": "DylTUjsN",
-      "originalName": "VID-20260905-WA0005.mp4",
-      "storedFileName": "50",
-      "tgFileId": 50,
-      "folderId": "f238f42e85004475",
-      "mimeType": "video/mp4",
-      "sizeBytes": 55310130,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-13T09:45:57.000Z",
-      "expiresAt": null,
-      "downloadCount": 0,
-      "isPasswordProtected": false,
-      "hasDirectLink": true,
-      "description": ""
-    },
-    {
-      "id": "file_tg_51",
-      "shareToken": "0k9dfStd",
-      "originalName": "VID-20260905-WA0003.mp4",
-      "storedFileName": "51",
-      "tgFileId": 51,
-      "folderId": "f238f42e85004475",
-      "mimeType": "video/mp4",
-      "sizeBytes": 31753853,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-13T09:46:27.000Z",
-      "expiresAt": null,
-      "downloadCount": 0,
-      "isPasswordProtected": false,
-      "hasDirectLink": true,
-      "description": ""
-    },
-    {
-      "id": "file_tg_53",
-      "shareToken": "8JpvqT1e",
-      "originalName": "Screenshot (7).png",
-      "storedFileName": "53",
-      "tgFileId": 53,
-      "folderId": "f238f42e85004475",
-      "mimeType": "image/png",
-      "sizeBytes": 345313,
-      "uploadedBy": "user_admin_teamthunder",
-      "uploaderEmail": "teamthunderofficialyt@gmail.com",
-      "uploaderName": "Team Thunder Admin",
-      "createdAt": "2026-09-15T15:38:54.000Z",
-      "expiresAt": null,
-      "downloadCount": 0,
-      "isPasswordProtected": false,
-      "hasDirectLink": true,
-      "description": "Uploaded via TG Uploads App by Guest"
-    },
-    {
       "id": "file_f4ad1f4fe396b538",
       "shareToken": "peOtX_lb",
       "originalName": "sample-test.txt",
@@ -260,6 +180,73 @@
   ],
   "orders": [
     {
+      "id": "ord_1789568323257_e300ac94",
+      "userId": "usr_6dae2b084dde0eac",
+      "userEmail": "freefiregtamcpe@gmail.com",
+      "userName": "freefire",
+      "planId": "plan_ultra",
+      "planName": "TG Enterprise",
+      "billingCycle": "monthly",
+      "amount": 1499,
+      "currency": "INR",
+      "status": "pending",
+      "createdAt": "2026-09-16T14:18:43.257Z",
+      "description": "TG Uploads Plan: TG Enterprise (monthly) - ₹1499 INR",
+      "trackId": "demo_1789568323257",
+      "payLink": "http://localhost:3000/#/payment-demo?orderId=ord_1789568323257_e300ac94"
+    },
+    {
+      "id": "ord_1789568317503_5b82de0f",
+      "userId": "usr_6dae2b084dde0eac",
+      "userEmail": "freefiregtamcpe@gmail.com",
+      "userName": "freefire",
+      "planId": "plan_pro",
+      "planName": "Pro Thunder",
+      "billingCycle": "monthly",
+      "amount": 499,
+      "currency": "INR",
+      "status": "paid",
+      "createdAt": "2026-09-16T14:18:37.503Z",
+      "description": "TG Uploads Plan: Pro Thunder (monthly) - ₹499 INR",
+      "trackId": "demo_1789568317503",
+      "payLink": "http://localhost:3000/#/payment-demo?orderId=ord_1789568317503_5b82de0f",
+      "paidAt": "2026-09-16T14:18:38.879Z"
+    },
+    {
+      "id": "ord_1789568306248_206b0afd",
+      "userId": "usr_6dae2b084dde0eac",
+      "userEmail": "freefiregtamcpe@gmail.com",
+      "userName": "freefire",
+      "planId": "plan_pro",
+      "planName": "Pro Thunder",
+      "billingCycle": "monthly",
+      "amount": 499,
+      "currency": "INR",
+      "status": "paid",
+      "createdAt": "2026-09-16T14:18:26.248Z",
+      "description": "TG Uploads Plan: Pro Thunder (monthly) - ₹499 INR",
+      "trackId": "demo_1789568306248",
+      "payLink": "http://localhost:3000/#/payment-demo?orderId=ord_1789568306248_206b0afd",
+      "paidAt": "2026-09-16T14:18:29.399Z"
+    },
+    {
+      "id": "ord_1789567973532_57995db5",
+      "userId": "usr_6dae2b084dde0eac",
+      "userEmail": "freefiregtamcpe@gmail.com",
+      "userName": "freefire",
+      "planId": "plan_pro",
+      "planName": "Pro Thunder",
+      "billingCycle": "monthly",
+      "amount": 499,
+      "currency": "INR",
+      "status": "paid",
+      "createdAt": "2026-09-16T14:12:53.532Z",
+      "description": "TG Uploads Plan: Pro Thunder (monthly) - ₹499 INR",
+      "trackId": "demo_1789567973532",
+      "payLink": "http://localhost:3000/#/payment-demo?orderId=ord_1789567973532_57995db5",
+      "paidAt": "2026-09-16T14:12:58.753Z"
+    },
+    {
       "id": "ord_1789567856882_615aaf62",
       "userId": "user_admin_teamthunder",
       "userEmail": "teamthunderofficialyt@gmail.com",
@@ -277,6 +264,7 @@
       "paidAt": "2026-09-16T14:11:18.107Z"
     }
   ],
+  "publicFiles": [],
   "settings": {
     "siteName": "TG Uploads",
     "tagline": "Lightning-Fast, Cloud-Powered File Sharing & Storage",
@@ -291,7 +279,16 @@
     "currency": "INR",
     "oxapayApiKey": "",
     "oxapayEnabled": true,
-    "oxapaySandbox": true
+    "oxapaySandbox": true,
+    "customHeadCode": "",
+    "adsTxt": "",
+    "adsEnabled": true,
+    "adDownloadTop": "",
+    "adDownloadBelowDetails": "",
+    "adDownloadBelowButton": "",
+    "adDownloadSidebar": "",
+    "adDownloadBottom": "",
+    "adDownloadPopunder": ""
   },
   "sessions": {
     "tgs_d7ab717aca2267759f4791517ef1d3d7470743cc1eab5bc7": {
@@ -321,6 +318,10 @@
     "tgs_def0ff37d39b4030d021c56b525f6fccd4b45581d5c76ee3": {
       "userId": "user_admin_teamthunder",
       "expiresAt": 1792159843015
+    },
+    "tgs_be864dd6be7350486a2f6481a29643d3cf5a61a0acd8de22": {
+      "userId": "usr_6dae2b084dde0eac",
+      "expiresAt": 1792159965116
     }
   }
 }

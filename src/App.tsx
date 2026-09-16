@@ -88,9 +88,7 @@ export default function App() {
     try {
       const res = await api.getMyFiles();
       setFiles(res.files);
-      if (user) {
-        setUser(prev => prev ? { ...prev, usedStorageBytes: res.totalStorageBytes } : null);
-      }
+      setUser(prev => prev ? { ...prev, usedStorageBytes: res.totalStorageBytes } : null);
     } catch (err) {
       console.error('Failed to load user files:', err);
     } finally {

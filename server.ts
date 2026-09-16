@@ -767,6 +767,8 @@ app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req
 
 app.get('/api/files/my-files', requireAuth, (req: Request, res: Response) => {
   const user = (req as any).user as StoredUser;
+  // Recalculate strictly for this specific authenticated user
+  const totalStorageBytes = db.recalculateUserStorage(user.id);
   const files = db.getFilesByUser(user.id);
   
   const cleanFiles = files.map(f => {
@@ -776,7 +778,7 @@ app.get('/api/files/my-files', requireAuth, (req: Request, res: Response) => {
 
   res.json({
     files: cleanFiles,
-    totalStorageBytes: user.usedStorageBytes
+    totalStorageBytes
   });
 });
 
@@ -1366,52 +1368,6 @@ app.post('/api/admin/orders/:id/activate', requireAdmin, (req: Request, res: Res
   });
 });
 
-// Sync existing files from TGWebDrive folder into database
-async function syncTgFiles() {
-  try {
-    const folderId = await getFolderId();
-    const res = await fetch(`${TG_BASE_URL}/files?folder=${encodeURIComponent(folderId)}&limit=100`, {
-      headers: { 'X-API-Key': TG_API_KEY }
-    });
-    if (!res.ok) return;
-    const data: any = await res.json();
-    if (!data.items || !Array.isArray(data.items)) return;
-
-    const adminUser = db.getUserByEmail('teamthunderofficialyt@gmail.com') || db.getUsers()[0];
-    const existingFiles = db.getFiles();
-
-    for (const item of data.items) {
-      const alreadyInDb = existingFiles.some(f => f.tgFileId === item.id || f.storedFileName === String(item.id));
-      if (!alreadyInDb && adminUser) {
-        const shareToken = crypto.randomBytes(6).toString('base64url');
-        const fileItem: StoredFileItem = {
-          id: 'file_tg_' + item.id,
-          shareToken,
-          originalName: item.name,
-          storedFileName: String(item.id),
-          tgFileId: item.id,
-          folderId: folderId,
-          mimeType: item.mime || 'application/octet-stream',
-          sizeBytes: item.size || 0,
-          uploadedBy: adminUser.id,
-          uploaderEmail: adminUser.email,
-          uploaderName: adminUser.name,
-          createdAt: item.date ? new Date(item.date * 1000).toISOString() : new Date().toISOString(),
-          expiresAt: null,
-          downloadCount: 0,
-          isPasswordProtected: false,
-          hasDirectLink: true,
-          description: item.caption || ''
-        };
-        db.addFile(fileItem);
-        console.log(`[TG Sync] Registered existing drive file: ${item.name} (ID: ${item.id})`);
-      }
-    }
-  } catch (err) {
-    console.warn('[TG Sync] Could not sync files on startup:', err);
-  }
-}
-
 // ==========================================
 // 6. PUBLIC ROOT FILES & VITE MIDDLEWARE
 // ==========================================
@@ -1470,7 +1426,6 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[TG Uploads Server] running at http://0.0.0.0:${PORT}`);
     console.log(`[TG Uploads Server] Admin access configured for: teamthunderofficialyt@gmail.com`);
-    syncTgFiles();
   });
 }
 

@@ -178,15 +178,27 @@ class Database {
           return p;
         });
 
-        return {
+        const cleanFiles = (parsed.files || []).filter((f: StoredFileItem) => !f.id.startsWith('file_tg_'));
+
+        const loadedData: DatabaseSchema = {
           users: parsed.users || [],
           plans,
-          files: parsed.files || [],
+          files: cleanFiles,
           orders: parsed.orders || [],
           publicFiles: parsed.publicFiles || [],
           settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}), currency: 'INR' },
           sessions: parsed.sessions || {}
         };
+
+        // Recalculate storage for all users based only on their actual uploaded files
+        loadedData.users.forEach(u => {
+          const userTotal = cleanFiles
+            .filter((f: StoredFileItem) => f.uploadedBy === u.id || (f.uploaderEmail && u.email && f.uploaderEmail.toLowerCase() === u.email.toLowerCase()))
+            .reduce((acc: number, f: StoredFileItem) => acc + (f.sizeBytes || 0), 0);
+          u.usedStorageBytes = userTotal;
+        });
+
+        return loadedData;
       }
     } catch (err) {
       console.error('Error loading DB file, creating fresh DB:', err);
@@ -344,15 +356,15 @@ class Database {
   }
 
   public recalculateUserStorage(userId: string): number {
-    const total = this.data.files
-      .filter(f => f.uploadedBy === userId)
-      .reduce((acc, f) => acc + f.sizeBytes, 0);
-
     const user = this.getUserById(userId);
-    if (user) {
-      user.usedStorageBytes = total;
-      this.persist();
-    }
+    if (!user) return 0;
+
+    const total = this.data.files
+      .filter(f => f.uploadedBy === userId || (f.uploaderEmail && user.email && f.uploaderEmail.toLowerCase() === user.email.toLowerCase()))
+      .reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
+
+    user.usedStorageBytes = total;
+    this.persist();
     return total;
   }
 
@@ -457,7 +469,14 @@ class Database {
   }
 
   public getFilesByUser(userId: string): StoredFileItem[] {
-    return this.data.files.filter(f => f.uploadedBy === userId);
+    const user = this.getUserById(userId);
+    if (!user) {
+      return this.data.files.filter(f => f.uploadedBy === userId);
+    }
+    return this.data.files.filter(f => 
+      f.uploadedBy === userId || 
+      (f.uploaderEmail && user.email && f.uploaderEmail.toLowerCase() === user.email.toLowerCase())
+    );
   }
 
   public addFile(file: StoredFileItem): StoredFileItem {
