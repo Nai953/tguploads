@@ -36,6 +36,20 @@ async function getFolderId(): Promise<string> {
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+// Trust reverse proxies (Nginx, Cloudflare, Caddy) for custom domains like tguploads.eu.cc
+app.set('trust proxy', true);
+
+// Enable CORS for custom domain & external requests
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -1438,7 +1452,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        allowedHosts: true
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
