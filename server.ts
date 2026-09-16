@@ -695,47 +695,61 @@ app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req
     filePasswordHash = hash;
   }
 
+// Asynchronously sync uploaded file to TGWebDrive cloud in the background
+async function syncUploadedFileToTgCloud(
+  fileId: string,
+  filePath: string,
+  originalName: string,
+  sizeBytes: number,
+  folderId: string,
+  caption?: string
+) {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const tgUploadUrl = `${TG_BASE_URL}/files?folder=${encodeURIComponent(folderId)}`;
+    const fileBuffer = fs.readFileSync(filePath);
+
+    const tgRes = await fetch(tgUploadUrl, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': TG_API_KEY,
+        'X-Filename': originalName,
+        'X-Filesize': String(sizeBytes),
+        'X-Force-Document': '1',
+        'X-Caption': caption || `Uploaded via TG Uploads`
+      },
+      body: fileBuffer
+    });
+
+    const tgData: any = await tgRes.json();
+    if (tgRes.ok && tgData.ok && tgData.file) {
+      db.updateFile(fileId, {
+        tgFileId: tgData.file.id,
+        storedFileName: String(tgData.file.id),
+        mimeType: tgData.file.mime || undefined
+      });
+      console.log(`[TG Cloud Sync] Backed up ${originalName} (ID: ${tgData.file.id}) to Telegram cloud drive`);
+    } else {
+      console.warn(`[TG Cloud Sync] Response notice for ${originalName}:`, tgData);
+    }
+  } catch (tgErr) {
+    console.error(`[TG Cloud Sync] Background backup failed for ${originalName}:`, tgErr);
+  }
+}
+
   const savedFiles: StoredFileItem[] = [];
   const folderId = await getFolderId();
 
   for (const f of files) {
     const shareToken = crypto.randomBytes(6).toString('base64url'); // Clean, shareable URL token e.g. "aB3-9x"
-    let tgFileId: number | undefined = undefined;
-    let finalMime = f.mimetype || 'application/octet-stream';
-
-    // Upload directly to TGWebDrive API
-    try {
-      const fileBuffer = fs.readFileSync(f.path);
-      const tgUploadUrl = `${TG_BASE_URL}/files?folder=${encodeURIComponent(folderId)}`;
-      const tgRes = await fetch(tgUploadUrl, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': TG_API_KEY,
-          'X-Filename': f.originalname,
-          'X-Filesize': String(f.size),
-          'X-Force-Document': '1',
-          'X-Caption': description || `Uploaded via TG Uploads by ${user.name || user.email}`
-        },
-        body: fileBuffer
-      });
-
-      const tgData: any = await tgRes.json();
-      if (tgRes.ok && tgData.ok && tgData.file) {
-        tgFileId = tgData.file.id;
-        if (tgData.file.mime) finalMime = tgData.file.mime;
-      } else {
-        console.warn('TGWebDrive upload response not ok:', tgData);
-      }
-    } catch (tgErr) {
-      console.error('Failed to upload to TGWebDrive:', tgErr);
-    }
+    const finalMime = f.mimetype || 'application/octet-stream';
 
     const fileItem: StoredFileItem = {
       id: 'file_' + crypto.randomBytes(8).toString('hex'),
       shareToken,
       originalName: f.originalname,
-      storedFileName: tgFileId ? String(tgFileId) : f.filename,
-      tgFileId,
+      storedFileName: f.filename,
+      tgFileId: undefined,
       folderId,
       filePath: f.path,
       mimeType: finalMime,
@@ -754,6 +768,16 @@ app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req
 
     const saved = db.addFile(fileItem);
     savedFiles.push(saved);
+
+    // Sync to TG Cloud in the background without making the user wait
+    syncUploadedFileToTgCloud(
+      saved.id,
+      f.path,
+      f.originalname,
+      f.size,
+      folderId,
+      description || `Uploaded via TG Uploads by ${user.name || user.email}`
+    );
   }
 
   res.status(201).json({
