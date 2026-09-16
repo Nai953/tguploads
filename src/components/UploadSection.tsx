@@ -45,6 +45,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadLoadedMB, setUploadLoadedMB] = useState('0.00');
+  const [uploadTotalMB, setUploadTotalMB] = useState('0.00');
+  const [uploadSpeed, setUploadSpeed] = useState('');
+  const [uploadStatus, setUploadStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [recentlyUploaded, setRecentlyUploaded] = useState<FileItem[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -128,7 +132,14 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
     setError(null);
     setUploading(true);
-    setUploadProgress(15);
+    setUploadProgress(0);
+
+    const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+    const initialTotalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+    setUploadLoadedMB('0.00');
+    setUploadTotalMB(initialTotalMB);
+    setUploadSpeed('');
+    setUploadStatus('Encrypting & preparing transmission...');
 
     const formData = new FormData();
     selectedFiles.forEach(f => {
@@ -144,20 +155,25 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     }
 
     try {
-      // Simulate stepped progress
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(interval);
-            return 90;
-          }
-          return prev + 15;
-        });
-      }, 150);
+      const res = await api.uploadFilesWithProgress(formData, (p) => {
+        setUploadProgress(p.percent);
+        setUploadLoadedMB(p.loadedMB);
+        setUploadTotalMB(p.totalMB);
 
-      const res = await api.uploadFiles(formData);
-      clearInterval(interval);
+        if (p.speedBytesPerSec > 0) {
+          const speedMB = (p.speedBytesPerSec / (1024 * 1024)).toFixed(1);
+          setUploadSpeed(`${speedMB} MB/s`);
+        }
+
+        if (p.percent >= 100) {
+          setUploadStatus('Saving & finalizing file encryption on cloud...');
+        } else {
+          setUploadStatus(`Uploading ${p.loadedMB} MB of ${p.totalMB} MB...`);
+        }
+      });
+
       setUploadProgress(100);
+      setUploadStatus('Upload completed successfully!');
 
       setTimeout(() => {
         setRecentlyUploaded(res.files);
@@ -166,12 +182,17 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
         setDescription('');
         setUploading(false);
         setUploadProgress(0);
+        setUploadLoadedMB('0.00');
+        setUploadTotalMB('0.00');
+        setUploadSpeed('');
+        setUploadStatus('');
         onUploadSuccess(res.files);
-      }, 400);
+      }, 500);
 
     } catch (err: any) {
       setUploading(false);
       setUploadProgress(0);
+      setUploadStatus('');
       setError(err.message || 'Upload failed. Please try again.');
     }
   };
@@ -406,21 +427,55 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             />
           </div>
 
-          {/* Upload Progress Bar (if uploading) */}
+          {/* Upload Progress Bar in MB (if uploading) */}
           {uploading && (
-            <div className="space-y-2 pt-2">
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-cyan-400 flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Uploading to TG Uploads Cloud...
-                </span>
-                <span className="text-white font-mono">{uploadProgress}%</span>
+            <div id="upload-progress-card" className="p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-cyan-500/30 shadow-xl space-y-3 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      {uploadStatus || 'Uploading to TG Uploads Cloud...'}
+                    </span>
+                    <span className="text-[11px] text-cyan-300 font-mono flex items-center gap-1.5 mt-0.5">
+                      <span className="font-semibold text-white">{uploadLoadedMB} MB</span> of <span className="text-slate-400">{uploadTotalMB} MB</span>
+                      {uploadSpeed && (
+                        <span className="text-emerald-400 ml-1.5 pl-1.5 border-l border-slate-700 flex items-center gap-1 font-sans font-medium">
+                          ⚡ {uploadSpeed}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center">
+                  <span className="text-base font-extrabold text-cyan-400 font-mono">
+                    {uploadProgress}%
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {uploadProgress >= 100 
+                      ? 'Finalizing encryption...' 
+                      : `${Math.max(0, parseFloat(uploadTotalMB || '0') - parseFloat(uploadLoadedMB || '0')).toFixed(2)} MB remaining`}
+                  </span>
+                </div>
               </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+
+              {/* Glowing animated progress bar */}
+              <div className="relative w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
                 <div 
-                  className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 transition-all duration-200 relative shadow-[0_0_12px_rgba(6,182,212,0.5)]"
+                  style={{ width: `${Math.max(2, uploadProgress)}%` }}
+                >
+                  <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5 font-medium">
+                <span>0.00 MB</span>
+                <span className="text-cyan-400/90">End-to-End Encrypted Transfer</span>
+                <span>{uploadTotalMB} MB</span>
               </div>
             </div>
           )}

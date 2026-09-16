@@ -123,6 +123,87 @@ export const api = {
       body: formData
     }),
 
+  uploadFilesWithProgress: (
+    formData: FormData,
+    onProgress?: (progress: {
+      loadedBytes: number;
+      totalBytes: number;
+      percent: number;
+      loadedMB: string;
+      totalMB: string;
+      speedBytesPerSec: number;
+    }) => void
+  ): Promise<{ message: string; files: FileItem[] }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const token = getStoredToken();
+      
+      const startTime = Date.now();
+      let lastLoaded = 0;
+      let lastTime = startTime;
+      let currentSpeed = 0;
+
+      xhr.open('POST', '/api/files/upload');
+
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable && e.total > 0) {
+            const now = Date.now();
+            const timeDiff = (now - lastTime) / 1000;
+            if (timeDiff >= 0.15 || e.loaded === e.total) {
+              const loadedDiff = e.loaded - lastLoaded;
+              if (timeDiff > 0) {
+                currentSpeed = loadedDiff / timeDiff;
+              }
+              lastLoaded = e.loaded;
+              lastTime = now;
+            }
+
+            const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+            const loadedMB = (e.loaded / (1024 * 1024)).toFixed(2);
+            const totalMB = (e.total / (1024 * 1024)).toFixed(2);
+
+            onProgress({
+              loadedBytes: e.loaded,
+              totalBytes: e.total,
+              percent,
+              loadedMB,
+              totalMB,
+              speedBytesPerSec: currentSpeed
+            });
+          }
+        });
+      }
+
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText || '{}');
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(data);
+          } else {
+            reject(new Error(data.error || `Upload failed with status ${xhr.status}`));
+          }
+        } catch (err) {
+          reject(new Error(`Failed to parse response (${xhr.status})`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error during upload. Please check your connection.'));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error('Upload timed out. Please try again.'));
+      };
+
+      xhr.send(formData);
+    });
+  },
+
   getMyFiles: () => request<{ files: FileItem[]; totalStorageBytes: number }>('/api/files/my-files'),
 
   deleteFile: (id: string) =>
