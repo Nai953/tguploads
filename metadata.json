@@ -1,0 +1,6 @@
+{
+  "name": "TG Uploads",
+  "description": "High-speed secure file sharing platform with user management, tier plans, file preview, and administrative control panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
