@@ -27,7 +27,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ file, onClose }) => {
 
   if (!file) return null;
 
-  const shareUrl = `${window.location.origin}/#/share/${file.shareToken}`;
+  const shareUrl = `${window.location.origin}/share/${file.shareToken}`;
   const directUrl = `${window.location.origin}/api/download/${file.id}`;
   const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(`Download ${file.originalName} on TG Uploads`)}`;
 

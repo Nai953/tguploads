@@ -9,14 +9,14 @@ import {
   User as UserIcon, 
   HardDrive,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  LayoutDashboard
 } from 'lucide-react';
 import { User, Plan } from '../types.js';
 import { formatBytes } from '../lib/utils.js';
+import { Link, useRouter } from '../lib/router.js';
 
 interface NavbarProps {
-  currentTab: 'upload' | 'files' | 'plans' | 'admin';
-  setCurrentTab: (tab: 'upload' | 'files' | 'plans' | 'admin') => void;
   user: User | null;
   plan: Plan | null;
   onOpenAuth: (mode: 'login' | 'register') => void;
@@ -24,19 +24,24 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentTab,
-  setCurrentTab,
   user,
   plan,
   onOpenAuth,
   onLogout
 }) => {
+  const { pathname } = useRouter();
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
   const isAdmin = user?.role === 'admin' || user?.email.toLowerCase() === 'teamthunderofficialyt@gmail.com';
 
   const usedBytes = user?.usedStorageBytes || 0;
   const limitBytes = plan?.storageLimitBytes || 5 * 1024 * 1024 * 1024;
   const usagePercent = Math.min(100, Math.round((usedBytes / limitBytes) * 100));
+
+  const isUploadActive = pathname === '/' || pathname === '/upload';
+  const isDashboardActive = pathname === '/dashboard';
+  const isFilesActive = pathname === '/files' || pathname === '/vault';
+  const isPlansActive = pathname === '/plans' || pathname === '/pricing';
+  const isAdminActive = pathname.startsWith('/admin');
 
   return (
     <nav id="app-navbar" className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-800">
@@ -45,9 +50,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Brand Logo */}
           <div className="flex items-center gap-6">
-            <button
+            <Link
               id="brand-logo-btn"
-              onClick={() => setCurrentTab('upload')}
+              to="/"
               className="flex items-center gap-2.5 group focus:outline-none"
             >
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform">
@@ -61,55 +66,68 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Cloud Share
                 </span>
               </div>
-            </button>
+            </Link>
 
             {/* Desktop Navigation Links */}
             <div className="hidden md:flex items-center gap-1">
-              <button
+              <Link
                 id="nav-upload-tab"
-                onClick={() => setCurrentTab('upload')}
+                to="/upload"
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  currentTab === 'upload'
+                  isUploadActive
                     ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
                 <UploadCloud className="w-4 h-4" />
                 Upload
-              </button>
+              </Link>
 
-              <button
-                id="nav-files-tab"
-                onClick={() => setCurrentTab('files')}
+              <Link
+                id="nav-dashboard-tab"
+                to="/dashboard"
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  currentTab === 'files'
+                  isDashboardActive
+                    ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </Link>
+
+              <Link
+                id="nav-files-tab"
+                to="/files"
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isFilesActive
                     ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
                 <FolderOpen className="w-4 h-4" />
                 My Files
-              </button>
+              </Link>
 
-              <button
+              <Link
                 id="nav-plans-tab"
-                onClick={() => setCurrentTab('plans')}
+                to="/plans"
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  currentTab === 'plans'
+                  isPlansActive
                     ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
                 <Crown className="w-4 h-4 text-amber-400" />
                 Plans & Pricing
-              </button>
+              </Link>
 
               {isAdmin && (
-                <button
+                <Link
                   id="nav-admin-tab"
-                  onClick={() => setCurrentTab('admin')}
+                  to="/admin"
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    currentTab === 'admin'
+                    isAdminActive
                       ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/20'
                       : 'text-purple-300 hover:text-purple-200 hover:bg-purple-950/40'
                   }`}
@@ -119,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-500/30 text-purple-200 font-mono uppercase tracking-wider">
                     Staff
                   </span>
-                </button>
+                </Link>
               )}
             </div>
           </div>
@@ -129,9 +147,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             {user ? (
               <>
                 {/* Storage Quota Mini Widget */}
-                <div 
+                <Link 
+                  to="/plans"
                   id="user-storage-mini"
-                  onClick={() => setCurrentTab('plans')}
                   title="Click to upgrade storage"
                   className="hidden lg:flex flex-col cursor-pointer bg-slate-900/80 hover:bg-slate-800/80 transition-colors border border-slate-800 rounded-xl px-3 py-1.5 min-w-[170px]"
                 >
@@ -150,14 +168,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                       style={{ width: `${Math.max(4, usagePercent)}%` }}
                     />
                   </div>
-                </div>
+                </Link>
 
                 {/* User Dropdown */}
                 <div className="relative">
                   <button
                     id="user-profile-btn"
                     onClick={() => setDropdownOpen(!dropdownOpen)}
-                    className="flex items-center gap-2.5 p-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all focus:outline-none"
+                    className="flex items-center gap-2.5 p-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all focus:outline-none cursor-pointer"
                   >
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center font-bold text-white text-xs">
                       {user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}
@@ -205,42 +223,46 @@ export const Navbar: React.FC<NavbarProps> = ({
                       </div>
 
                       <div className="py-1">
-                        <button
+                        <Link
+                          id="menu-dashboard-btn"
+                          to="/dashboard"
+                          onClick={() => setDropdownOpen(false)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
+                        >
+                          <LayoutDashboard className="w-4 h-4 text-cyan-400" />
+                          User Dashboard
+                        </Link>
+
+                        <Link
                           id="menu-my-files-btn"
-                          onClick={() => {
-                            setCurrentTab('files');
-                            setDropdownOpen(false);
-                          }}
+                          to="/files"
+                          onClick={() => setDropdownOpen(false)}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
                         >
                           <FolderOpen className="w-4 h-4 text-cyan-400" />
                           My Stored Files
-                        </button>
+                        </Link>
 
-                        <button
+                        <Link
                           id="menu-plans-btn"
-                          onClick={() => {
-                            setCurrentTab('plans');
-                            setDropdownOpen(false);
-                          }}
+                          to="/plans"
+                          onClick={() => setDropdownOpen(false)}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
                         >
                           <Crown className="w-4 h-4 text-amber-400" />
                           Upgrade Plan & Storage
-                        </button>
+                        </Link>
 
                         {isAdmin && (
-                          <button
+                          <Link
                             id="menu-admin-btn"
-                            onClick={() => {
-                              setCurrentTab('admin');
-                              setDropdownOpen(false);
-                            }}
+                            to="/admin"
+                            onClick={() => setDropdownOpen(false)}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-purple-300 hover:text-purple-200 hover:bg-purple-950/40 rounded-lg transition-colors font-medium"
                           >
                             <ShieldCheck className="w-4 h-4 text-purple-400" />
                             TG Uploads Admin Panel
-                          </button>
+                          </Link>
                         )}
                       </div>
 
@@ -251,7 +273,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                             setDropdownOpen(false);
                             onLogout();
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
                         >
                           <LogOut className="w-4 h-4" />
                           Sign Out
@@ -285,47 +307,57 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Mobile Sub-Navigation Bar */}
         <div className="flex md:hidden items-center justify-around py-2 border-t border-slate-800/80">
-          <button
+          <Link
             id="mobile-nav-upload"
-            onClick={() => setCurrentTab('upload')}
+            to="/upload"
             className={`flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg ${
-              currentTab === 'upload' ? 'text-cyan-400' : 'text-slate-400'
+              isUploadActive ? 'text-cyan-400' : 'text-slate-400'
             }`}
           >
             <UploadCloud className="w-4 h-4" />
             Upload
-          </button>
-          <button
-            id="mobile-nav-files"
-            onClick={() => setCurrentTab('files')}
+          </Link>
+          <Link
+            id="mobile-nav-dash"
+            to="/dashboard"
             className={`flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg ${
-              currentTab === 'files' ? 'text-cyan-400' : 'text-slate-400'
+              isDashboardActive ? 'text-cyan-400' : 'text-slate-400'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Dash
+          </Link>
+          <Link
+            id="mobile-nav-files"
+            to="/files"
+            className={`flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg ${
+              isFilesActive ? 'text-cyan-400' : 'text-slate-400'
             }`}
           >
             <FolderOpen className="w-4 h-4" />
             Files
-          </button>
-          <button
+          </Link>
+          <Link
             id="mobile-nav-plans"
-            onClick={() => setCurrentTab('plans')}
+            to="/plans"
             className={`flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg ${
-              currentTab === 'plans' ? 'text-cyan-400' : 'text-slate-400'
+              isPlansActive ? 'text-cyan-400' : 'text-slate-400'
             }`}
           >
             <Crown className="w-4 h-4 text-amber-400" />
             Plans
-          </button>
+          </Link>
           {isAdmin && (
-            <button
+            <Link
               id="mobile-nav-admin"
-              onClick={() => setCurrentTab('admin')}
+              to="/admin"
               className={`flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg ${
-                currentTab === 'admin' ? 'text-purple-400' : 'text-purple-300/70'
+                isAdminActive ? 'text-purple-400' : 'text-purple-300/70'
               }`}
             >
               <ShieldCheck className="w-4 h-4" />
               Admin
-            </button>
+            </Link>
           )}
         </div>
       </div>

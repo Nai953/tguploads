@@ -302,22 +302,24 @@ export const DownloadView: React.FC<DownloadViewProps> = ({
             {/* Expiration Note */}
             <div className="pt-2 flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-800/80">
               <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {file.expiresAt ? `Link expires on ${formatDate(file.expiresAt)}` : 'Permanent storage link'}
+                <Clock className="w-3 h-3 text-cyan-400" />
+                {file.isGuest || file.retentionType === 'after_last_download'
+                  ? `Guest link • Retains for 30 days after last download (extended on every download)`
+                  : file.expiresAt ? `Link expires on ${formatDate(file.expiresAt)}` : 'Unlimited Time (Permanent retention)'}
               </span>
-              <span>Hosted on TG Uploads</span>
+              <span className="text-cyan-400/90 font-medium">TG Uploads Secure Cloud</span>
             </div>
           </div>
 
           {/* Join TG Uploads Promotion */}
-          <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 to-cyan-950/30 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="space-y-1 text-center sm:text-left">
               <h4 className="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2">
                 <Zap className="w-4 h-4 text-cyan-400" />
-                Need to share large files fast?
+                Need to share files with Unlimited Time retention?
               </h4>
               <p className="text-xs text-slate-400">
-                Sign up for free and get 5 GB cloud storage instantly with no credit card required.
+                Sign up free and get 50 GB cloud storage with permanent, non-expiring files and zero credit card required!
               </p>
             </div>
 

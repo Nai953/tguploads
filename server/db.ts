@@ -35,10 +35,10 @@ const DEFAULT_PLANS: Plan[] = [
     id: 'plan_free',
     name: 'Free Starter',
     description: 'Perfect for quick file transfers and casual sharing.',
-    storageLimitBytes: 5 * 1024 * 1024 * 1024, // 5 GB
-    maxFileSizeBytes: 500 * 1024 * 1024,      // 500 MB
+    storageLimitBytes: 50 * 1024 * 1024 * 1024, // 50 GB
+    maxFileSizeBytes: 500 * 1024 * 1024,       // 500 MB
     downloadSpeed: 'Standard (10 MB/s)',
-    retentionDays: 30,
+    retentionDays: 0, // 0 = Unlimited time / Permanent
     passwordProtection: false,
     directLinks: false,
     prioritySupport: false,
@@ -48,9 +48,9 @@ const DEFAULT_PLANS: Plan[] = [
     isDefault: true,
     active: true,
     features: [
-      '5 GB Secure Cloud Storage',
+      '50 GB Secure Cloud Storage',
       '500 MB Maximum File Size',
-      '30-Day Auto Retention',
+      'Unlimited Time (Permanent - No Expiry)',
       'High-Speed CDN Transfers',
       'QR Code & Quick Share Links',
       'Direct In-Browser Previews'
@@ -138,6 +138,20 @@ const DEFAULT_SETTINGS: SiteSettings = {
 
 const DEFAULT_COUPONS: Coupon[] = [
   {
+    id: 'coup_free2026',
+    code: 'FREE2026',
+    description: '100% Free TG Enterprise Plan Upgrade',
+    discountType: 'free',
+    discountValue: 100,
+    applicablePlanIds: ['plan_ultra', 'all'],
+    applicableCycle: 'all',
+    maxUses: 0,
+    usedCount: 0,
+    expiresAt: null,
+    active: true,
+    createdAt: new Date().toISOString()
+  },
+  {
     id: 'coup_free100',
     code: 'FREE100',
     description: '100% Free Plan Upgrade (No payment required)',
@@ -199,6 +213,19 @@ class Database {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         const plans = (parsed.plans && parsed.plans.length > 0 ? parsed.plans : DEFAULT_PLANS).map((p: Plan) => {
+          if (p.id === 'plan_free') {
+            p.storageLimitBytes = 50 * 1024 * 1024 * 1024; // 50 GB
+            p.maxFileSizeBytes = 500 * 1024 * 1024;       // 500 MB
+            p.retentionDays = 0; // 0 = Unlimited Time / Permanent
+            p.features = [
+              '50 GB Secure Cloud Storage',
+              '500 MB Maximum File Size',
+              'Unlimited Time (Permanent - No Expiry)',
+              'High-Speed CDN Transfers',
+              'QR Code & Quick Share Links',
+              'Direct In-Browser Previews'
+            ];
+          }
           // Convert legacy USD prices to INR if needed
           if (p.id === 'plan_pro' && p.priceMonthly < 50) {
             p.priceMonthly = 499;
@@ -212,12 +239,17 @@ class Database {
 
         const cleanFiles = (parsed.files || []).filter((f: StoredFileItem) => !f.id.startsWith('file_tg_'));
 
+        const initialCoupons = parsed.coupons && Array.isArray(parsed.coupons) ? parsed.coupons : DEFAULT_COUPONS;
+        if (!initialCoupons.some((c: Coupon) => c.code === 'FREE2026')) {
+          initialCoupons.unshift(DEFAULT_COUPONS[0]);
+        }
+
         const loadedData: DatabaseSchema = {
           users: parsed.users || [],
           plans,
           files: cleanFiles,
           orders: parsed.orders || [],
-          coupons: parsed.coupons && Array.isArray(parsed.coupons) ? parsed.coupons : DEFAULT_COUPONS,
+          coupons: initialCoupons,
           publicFiles: parsed.publicFiles || [],
           settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}), currency: 'INR' },
           sessions: parsed.sessions || {}
@@ -552,8 +584,25 @@ class Database {
     const file = this.getFileById(fileId);
     if (file) {
       file.downloadCount += 1;
+      file.lastDownloadedAt = new Date().toISOString();
+      // If guest upload or retentionType is after_last_download, extend retention for 30 days from download
+      if (file.isGuest || file.retentionType === 'after_last_download') {
+        file.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
       this.persist();
     }
+  }
+
+  public getGuestUsedStorage(guestId: string): number {
+    const gid = guestId.startsWith('guest_') ? guestId : `guest_${guestId}`;
+    return this.data.files
+      .filter(f => f.uploadedBy === gid || f.uploadedBy === guestId)
+      .reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
+  }
+
+  public getFilesByGuest(guestId: string): StoredFileItem[] {
+    const gid = guestId.startsWith('guest_') ? guestId : `guest_${guestId}`;
+    return this.data.files.filter(f => f.uploadedBy === gid || f.uploadedBy === guestId);
   }
 
   // --- Orders & Payments ---

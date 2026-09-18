@@ -1,6 +1,7 @@
 import { User, Plan, FileItem, SiteSettings, AdminStats, PaymentOrder, PublicRootFile, Coupon } from '../types.js';
 
 const TOKEN_KEY = 'tg_auth_token';
+const GUEST_ID_KEY = 'tg_guest_id';
 
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -14,12 +15,25 @@ export function setStoredToken(token: string | null) {
   }
 }
 
+export function getGuestId(): string {
+  let gid = localStorage.getItem(GUEST_ID_KEY);
+  if (!gid) {
+    gid = 'guest_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+    localStorage.setItem(GUEST_ID_KEY, gid);
+  }
+  return gid;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
+  const guestId = getGuestId();
   const headers = new Headers(options.headers || {});
   
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (!headers.has('X-Guest-Id')) {
+    headers.set('X-Guest-Id', guestId);
   }
 
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -171,6 +185,7 @@ export const api = {
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
+      xhr.setRequestHeader('X-Guest-Id', getGuestId());
 
       if (xhr.upload && onProgress) {
         xhr.upload.addEventListener('progress', (e) => {
@@ -228,6 +243,14 @@ export const api = {
   },
 
   getMyFiles: () => request<{ files: FileItem[]; totalStorageBytes: number }>('/api/files/my-files'),
+  getGuestStatus: () => request<{
+    guestId: string;
+    usedStorageBytes: number;
+    storageLimitBytes: number;
+    maxFileSizeBytes: number;
+    retentionDays: number;
+    retentionDescription: string;
+  }>('/api/guest/status'),
 
   deleteFile: (id: string) =>
     request<{ success: boolean }>(`/api/files/${id}`, {

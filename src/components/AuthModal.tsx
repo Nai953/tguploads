@@ -79,7 +79,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {mode === 'login' ? 'Welcome Back' : 'Create Free Account'}
             </h2>
             <p className="text-xs text-slate-400">
-              {mode === 'login' ? 'Sign in to access your stored files & sharing limits' : 'Get free 5 GB cloud storage automatically on signup'}
+              {mode === 'login' 
+                ? 'Sign in to access your stored files & sharing dashboard' 
+                : 'Unlock 50 GB storage with Unlimited Time permanent file retention'}
             </p>
           </div>
         </div>
@@ -173,11 +175,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           {mode === 'register' && (
-            <div className="p-3 bg-cyan-950/30 border border-cyan-500/20 rounded-xl flex items-start gap-2 text-[11px] text-cyan-300">
-              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>
-                <strong>Free Starter Plan:</strong> 5 GB cloud storage, 500 MB per file, 30 days retention, and lightning-fast links included instantly!
-              </span>
+            <div className="p-3.5 bg-gradient-to-r from-cyan-950/40 via-blue-950/30 to-indigo-950/40 border border-cyan-500/30 rounded-2xl space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-cyan-300 font-bold">
+                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>Real Free Account Benefits (vs. Guest)</span>
+              </div>
+              <ul className="space-y-1 text-[11px] text-slate-300">
+                <li className="flex items-center gap-1.5 text-cyan-200">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <strong>Unlimited Time Retention:</strong> Files never expire (vs. 30 days for guests)
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <strong>50 GB Total Cloud Storage</strong> (50x more than 1 GB guest limit)
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <strong>500 MB Max File Size</strong> (10x higher than 50 MB guest limit)
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <strong>File Dashboard & History:</strong> Full tracking, downloads & permanent links
+                </li>
+              </ul>
             </div>
           )}
 

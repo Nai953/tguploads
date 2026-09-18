@@ -46,8 +46,7 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
     user && 
     currentPlan && 
     currentPlan.priceMonthly > 0 && 
-    user.planId !== 'plan_free' &&
-    user.role !== 'admin'
+    user.planId !== 'plan_free'
   );
 
   const formattedExpiry = user?.planExpiresAt 
@@ -142,7 +141,7 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
         </h1>
 
         <p className="text-sm sm:text-base text-slate-400">
-          Every new registration automatically receives the <strong className="text-cyan-300 font-semibold">Free Starter Plan (5 GB)</strong>. Upgrade anytime for permanent retention, password protection, and gigabit speeds.
+          Every new registration automatically receives the <strong className="text-cyan-300 font-semibold">Free Starter Plan (50 GB)</strong>. Upgrade anytime for permanent retention, password protection, and gigabit speeds.
         </p>
 
         {/* Active Paid User Status Banner */}
@@ -225,14 +224,20 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
           const price = billingCycle === 'yearly' ? plan.priceYearly : plan.priceMonthly;
           const period = billingCycle === 'yearly' ? '/year' : '/month';
 
-          // Check if this plan is lower than user's active paid plan
+          // Check if this plan is lower than user's active plan
           const isLower = Boolean(
-            isPaidUser && 
-            !isCurrent && 
-            currentPlan && (
-              plan.priceMonthly < currentPlan.priceMonthly ||
-              plan.storageLimitBytes < currentPlan.storageLimitBytes ||
-              plan.priceMonthly === 0
+            user && 
+            currentPlan && 
+            !isCurrent && (
+              // If user is on an active paid plan, any plan with lower price, lower storage quota, or free plan is lower
+              (isPaidUser && (
+                plan.priceMonthly < currentPlan.priceMonthly ||
+                plan.storageLimitBytes < currentPlan.storageLimitBytes ||
+                plan.priceMonthly === 0 ||
+                plan.id === 'plan_free'
+              )) ||
+              // If target plan has lower storage and lower/equal price than current plan
+              (plan.storageLimitBytes < currentPlan.storageLimitBytes && plan.priceMonthly <= currentPlan.priceMonthly)
             )
           );
 
@@ -241,7 +246,7 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
               key={plan.id}
               className={`relative rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 ${
                 isLower
-                  ? 'bg-slate-950/60 border border-slate-900 opacity-75'
+                  ? 'bg-slate-950/60 border border-slate-900 opacity-70'
                   : isPro
                   ? 'bg-gradient-to-b from-slate-900 to-cyan-950/40 border-2 border-cyan-500/50 shadow-2xl shadow-cyan-500/10 scale-102 z-10'
                   : 'bg-slate-900/70 border border-slate-800 hover:border-slate-700 shadow-xl'
@@ -250,15 +255,25 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
               {/* Badge */}
               {isLower ? (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700 shadow-md flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-slate-400" /> Downgrade Locked
+                  <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800/90 text-slate-400 border border-slate-700 shadow-md flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-slate-400" /> Lower Tier
+                  </span>
+                </div>
+              ) : isCurrent ? (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider shadow-md flex items-center gap-1 ${
+                    isPaidUser 
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                      : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  }`}>
+                    <Check className="w-3 h-3" /> Current Plan
                   </span>
                 </div>
               ) : plan.badge ? (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider shadow-md ${
                     isPro 
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black'
                       : isEnterprise
                       ? 'bg-purple-600 text-white'
                       : 'bg-slate-800 text-slate-300 border border-slate-700'
@@ -334,7 +349,7 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
                       <Clock className="w-3.5 h-3.5 text-cyan-400" /> File Retention
                     </span>
                     <span className="font-semibold text-slate-200">
-                      {plan.retentionDays === 0 ? 'Permanent' : `${plan.retentionDays} Days`}
+                      {plan.retentionDays === 0 ? 'Unlimited Time (Permanent)' : `${plan.retentionDays} Days`}
                     </span>
                   </div>
                 </div>
@@ -374,50 +389,53 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
               {/* Action Button & Info */}
               <div className="space-y-2">
                 {isLower ? (
-                  <>
+                  <div className="space-y-1.5">
                     <button
-                      id={`btn-plan-select-${plan.id}`}
+                      id={`btn-plan-lower-${plan.id}`}
                       disabled={true}
-                      className="w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-slate-900 text-slate-500 border border-slate-800 flex items-center justify-center gap-2 cursor-not-allowed"
+                      className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-slate-900/90 text-slate-500 border border-slate-800 flex items-center justify-center gap-2 cursor-not-allowed select-none"
                     >
                       <Lock className="w-4 h-4 text-slate-500" />
-                      <span>Cannot Downgrade Active Plan</span>
+                      <span>Lower Tier</span>
                     </button>
                     <p className="text-[11px] text-slate-500 text-center leading-relaxed">
-                      Only downgrades to Free if not renewed at expiration.
+                      Active {currentPlan?.name} includes higher storage & limits.
                     </p>
-                  </>
+                  </div>
                 ) : isCurrent && isPaidUser ? (
-                  <>
+                  <div className="space-y-1.5">
                     <button
                       id={`btn-plan-renew-${plan.id}`}
                       onClick={() => handleSelectPlan(plan, true)}
-                      className="w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg"
+                      className="w-full py-3.5 px-4 rounded-2xl font-extrabold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white border border-emerald-400/40 flex items-center justify-center gap-2 cursor-pointer transition-all shadow-lg shadow-emerald-500/25 active:scale-[0.99]"
                     >
-                      <RefreshCw className="w-4 h-4 text-emerald-400" />
-                      <span>Renew / Extend Plan (₹{price.toLocaleString('en-IN')})</span>
+                      <RefreshCw className="w-4 h-4 text-emerald-100" />
+                      <span>Renew Plan (₹{price.toLocaleString('en-IN')}{period})</span>
                     </button>
-                    {formattedExpiry && (
-                      <p className="text-[11px] text-emerald-400/80 text-center font-medium">
-                        Active until {formattedExpiry}
-                      </p>
-                    )}
-                  </>
+                    <p className="text-[11px] text-emerald-400 text-center font-medium">
+                      {formattedExpiry ? `Active until ${formattedExpiry} • Click to extend period` : 'Click to extend active subscription'}
+                    </p>
+                  </div>
                 ) : isCurrent ? (
-                  <button
-                    id={`btn-plan-select-${plan.id}`}
-                    disabled={true}
-                    className="w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center gap-2 cursor-default"
-                  >
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Active Current Plan</span>
-                  </button>
+                  <div className="space-y-1.5">
+                    <button
+                      id={`btn-plan-current-${plan.id}`}
+                      disabled={true}
+                      className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-slate-800 text-slate-400 border border-slate-700 flex items-center justify-center gap-2 cursor-default select-none"
+                    >
+                      <Check className="w-4 h-4 text-cyan-400" />
+                      <span>Current Plan (Free Forever)</span>
+                    </button>
+                    <p className="text-[11px] text-slate-500 text-center">
+                      Permanent free tier • No renewal required
+                    </p>
+                  </div>
                 ) : (
                   <button
                     id={`btn-plan-select-${plan.id}`}
                     onClick={() => handleSelectPlan(plan)}
                     disabled={upgradingId === plan.id}
-                    className={`w-full py-3 px-4 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default ${
+                    className={`w-full py-3.5 px-4 rounded-2xl font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default ${
                       isPro
                         ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-xl shadow-cyan-500/20'
                         : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
@@ -433,14 +451,9 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
                         <span>Sign Up to Get Started</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
-                    ) : price > 0 ? (
-                      <>
-                        <span>Upgrade to {plan.name} (₹{price.toLocaleString('en-IN')})</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
                     ) : (
                       <>
-                        <span>Switch to {plan.name}</span>
+                        <span>Upgrade to {plan.name} (₹{price.toLocaleString('en-IN')})</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -450,6 +463,94 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* Guest vs Free Sign-up vs Paid Breakdown */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/60 border border-slate-800 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-cyan-400" />
+              <span>Guest Uploads vs. Registered Accounts</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Anyone can upload immediately without an account. Sign up for free to unlock permanent retention and 50x more storage.
+            </p>
+          </div>
+          {!user && (
+            <button
+              onClick={() => onOpenAuth('register')}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 transition-all cursor-pointer self-start sm:self-auto"
+            >
+              Sign Up Free (Unlimited Time)
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                <th className="py-3 px-4">Feature / Limit</th>
+                <th className="py-3 px-4">Guest (No Account)</th>
+                <th className="py-3 px-4 text-cyan-400 font-bold">Free Starter (On Sign-up)</th>
+                <th className="py-3 px-4 text-amber-400">Pro Tier</th>
+                <th className="py-3 px-4 text-purple-400">Enterprise Tier</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">File Retention</td>
+                <td className="py-3.5 px-4 text-slate-400">30 days after last download</td>
+                <td className="py-3.5 px-4 text-cyan-300 font-bold">Unlimited Time (Permanent)</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-semibold">Unlimited Time (Permanent)</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-semibold">Unlimited Time (Permanent)</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">Total Cloud Storage</td>
+                <td className="py-3.5 px-4 text-slate-400">1 GB</td>
+                <td className="py-3.5 px-4 text-cyan-300 font-bold">50 GB</td>
+                <td className="py-3.5 px-4 text-white">50 GB</td>
+                <td className="py-3.5 px-4 text-white">500 GB</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">Max Single File Size</td>
+                <td className="py-3.5 px-4 text-slate-400">50 MB</td>
+                <td className="py-3.5 px-4 text-cyan-300 font-bold">500 MB</td>
+                <td className="py-3.5 px-4 text-white">5 GB</td>
+                <td className="py-3.5 px-4 text-white">25 GB</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">File Dashboard & Management</td>
+                <td className="py-3.5 px-4 text-slate-500">Browser Session only</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Full Dashboard</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Full Dashboard</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Full Dashboard</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">Password Protected Links</td>
+                <td className="py-3.5 px-4 text-slate-500">✕</td>
+                <td className="py-3.5 px-4 text-slate-500">✕</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Enabled</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Enabled</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">Direct Download Links</td>
+                <td className="py-3.5 px-4 text-slate-500">✕</td>
+                <td className="py-3.5 px-4 text-slate-500">✕</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Enabled</td>
+                <td className="py-3.5 px-4 text-emerald-400">✓ Enabled</td>
+              </tr>
+              <tr>
+                <td className="py-3.5 px-4 font-semibold text-white">Pricing</td>
+                <td className="py-3.5 px-4 text-slate-400">Free</td>
+                <td className="py-3.5 px-4 text-cyan-300 font-bold">Free Forever</td>
+                <td className="py-3.5 px-4 text-white">₹299/mo</td>
+                <td className="py-3.5 px-4 text-white">₹499/mo</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* OxaPay Checkout Modal */}

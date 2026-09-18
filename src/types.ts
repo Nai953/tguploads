@@ -43,7 +43,7 @@ export interface FileItem {
   folderId?: string;
   mimeType: string;
   sizeBytes: number;
-  uploadedBy: string; // userId
+  uploadedBy: string; // userId or guest ID
   uploaderEmail: string;
   uploaderName: string;
   createdAt: string;
@@ -52,6 +52,9 @@ export interface FileItem {
   isPasswordProtected: boolean;
   hasDirectLink: boolean;
   description?: string;
+  isGuest?: boolean;
+  retentionType?: 'permanent' | 'after_last_download' | 'fixed_days';
+  lastDownloadedAt?: string | null;
 }
 
 export interface SiteSettings {

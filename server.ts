@@ -99,6 +99,9 @@ function sanitizeUser(user: StoredUser) {
 
 // Determines if targetPlan is lower than currentPlan (less specs/price or reverting to free)
 function isLowerPlan(currentPlan: Plan, targetPlan: Plan): boolean {
+  if (currentPlan.id === targetPlan.id) {
+    return false; // same plan is a renewal, not lower
+  }
   if (currentPlan.priceMonthly > 0 && (targetPlan.priceMonthly === 0 || targetPlan.id === 'plan_free')) {
     return true;
   }
@@ -193,6 +196,15 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ error: 'Your account has been suspended. Please contact support.' });
   }
   (req as any).user = user;
+  next();
+}
+
+// Optional Auth Middleware (allows guests or authenticated users)
+function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  const user = getAuthUser(req);
+  if (user && !user.isSuspended) {
+    (req as any).user = user;
+  }
   next();
 }
 
@@ -370,7 +382,7 @@ app.post('/api/user/upgrade-plan', requireAuth, (req: Request, res: Response) =>
   }
 
   const currentPlan = db.getPlanById(user.planId) || db.getDefaultPlan();
-  const isPaidUser = (currentPlan.priceMonthly > 0 || user.planId !== 'plan_free') && user.role !== 'admin';
+  const isPaidUser = (currentPlan.priceMonthly > 0 || user.planId !== 'plan_free');
 
   // Paid users cannot switch to a lower plan under any circumstances.
   // It will only be downgraded if not renewed in the next month upon expiration.
@@ -380,7 +392,7 @@ app.post('/api/user/upgrade-plan', requireAuth, (req: Request, res: Response) =>
         ? new Date(user.planExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : 'the next billing cycle';
       return res.status(400).json({
-        error: `Paid users cannot switch to a lower plan under any circumstances. Your ${currentPlan.name} plan is active until ${expiryFormatted}. It will only be downgraded to the Free Starter plan if not renewed upon expiration.`
+        error: `You cannot switch to a lower plan while your ${currentPlan.name} is active. You can renew your ${currentPlan.name} plan or upgrade to a higher tier. It will only revert to Free if not renewed upon expiration (${expiryFormatted}).`
       });
     }
   }
@@ -451,7 +463,7 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
     }
 
     const currentPlan = db.getPlanById(user.planId) || db.getDefaultPlan();
-    const isPaidUser = (currentPlan.priceMonthly > 0 || user.planId !== 'plan_free') && user.role !== 'admin';
+    const isPaidUser = (currentPlan.priceMonthly > 0 || user.planId !== 'plan_free');
 
     // Prevent paid user from downgrading to a lower plan under any circumstances
     if (isPaidUser && targetPlan.id !== currentPlan.id) {
@@ -460,7 +472,7 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
           ? new Date(user.planExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'the end of your billing cycle';
         return res.status(400).json({
-          error: `Paid users cannot downgrade to a lower plan under any circumstances. You can renew your ${currentPlan.name} plan or upgrade to a higher tier. Your plan will only be downgraded to Free if not renewed at expiration (${expiryFormatted}).`
+          error: `You cannot purchase a lower plan while your ${currentPlan.name} is active. You can renew your ${currentPlan.name} plan or upgrade to a higher tier. It will only revert to Free if not renewed at expiration (${expiryFormatted}).`
         });
       }
     }
@@ -784,8 +796,22 @@ app.post('/api/payments/oxapay/simulate-payment', requireAuth, (req: Request, re
 // ==========================================
 // 3. FILE UPLOADS & MANAGEMENT APIS
 // ==========================================
-app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req: Request, res: Response) => {
-  const user = (req as any).user as StoredUser;
+app.get('/api/guest/status', (req: Request, res: Response) => {
+  const rawGuestId = (req.headers['x-guest-id'] as string) || (req.ip as string) || 'guest_anon';
+  const usedStorageBytes = db.getGuestUsedStorage(rawGuestId);
+  res.json({
+    guestId: rawGuestId,
+    usedStorageBytes,
+    storageLimitBytes: 1024 * 1024 * 1024, // 1 GB
+    maxFileSizeBytes: 50 * 1024 * 1024,   // 50 MB
+    retentionDays: 30,
+    retentionType: 'after_last_download',
+    retentionDescription: '30 days after last download (extends upon download)'
+  });
+});
+
+app.post('/api/files/upload', optionalAuth, upload.array('files', 10), async (req: Request, res: Response) => {
+  const user = (req as any).user as StoredUser | undefined;
   const files = (req.files as Express.Multer.File[]) || [];
   const { password, expiryDays, description } = req.body;
 
@@ -793,30 +819,51 @@ app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req
     return res.status(400).json({ error: 'No files provided for upload' });
   }
 
-  const plan = db.getPlanById(user.planId) || db.getDefaultPlan();
-  
-  // Validate file size and user total storage against plan
+  const isGuest = !user;
+  const rawGuestId = (req.headers['x-guest-id'] as string) || (req.ip as string) || 'guest_anon';
+  const guestId = rawGuestId.startsWith('guest_') ? rawGuestId : `guest_${rawGuestId}`;
+
+  // Explicit constraints:
+  // Non-signed up (guest): up to 50 MB per file, max storage 1 GB, file retention 30 days after last download
+  const GUEST_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+  const GUEST_STORAGE_LIMIT = 1024 * 1024 * 1024; // 1 GB
+  const GUEST_RETENTION_DAYS = 30;
+
+  const plan = user ? (db.getPlanById(user.planId) || db.getDefaultPlan()) : null;
+  const maxFileSizeBytes = user ? plan!.maxFileSizeBytes : GUEST_MAX_FILE_SIZE;
+  const storageLimitBytes = user ? plan!.storageLimitBytes : GUEST_STORAGE_LIMIT;
+  const currentUsedBytes = user ? user.usedStorageBytes : db.getGuestUsedStorage(guestId);
+
   const totalUploadSize = files.reduce((acc, f) => acc + f.size, 0);
 
   // Check each file max limit
   for (const f of files) {
-    if (f.size > plan.maxFileSizeBytes) {
-      // Clean up uploaded files
+    if (f.size > maxFileSizeBytes) {
       files.forEach(file => {
         try { fs.unlinkSync(file.path); } catch (e) {}
       });
-      const maxMb = Math.round(plan.maxFileSizeBytes / (1024 * 1024));
+      if (isGuest) {
+        return res.status(400).json({ 
+          error: `File "${f.originalname}" (${(f.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 50 MB guest upload limit. Create a free account to unlock 500 MB per file and unlimited time retention!` 
+        });
+      }
+      const maxMb = Math.round(maxFileSizeBytes / (1024 * 1024));
       return res.status(400).json({ 
         error: `File "${f.originalname}" exceeds your plan limit of ${maxMb} MB. Upgrade to upload larger files.` 
       });
     }
   }
 
-  // Check user storage ceiling
-  if (user.usedStorageBytes + totalUploadSize > plan.storageLimitBytes) {
+  // Check user/guest storage ceiling
+  if (currentUsedBytes + totalUploadSize > storageLimitBytes) {
     files.forEach(file => {
       try { fs.unlinkSync(file.path); } catch (e) {}
     });
+    if (isGuest) {
+      return res.status(400).json({ 
+        error: `Guest storage quota of 1 GB reached (${(currentUsedBytes / (1024 * 1024)).toFixed(1)} MB used). Sign up for a free account to get 50 GB storage with permanent unlimited-time retention!` 
+      });
+    }
     return res.status(400).json({ 
       error: 'Storage limit exceeded! Please upgrade your plan or delete old files to free up space.' 
     });
@@ -824,17 +871,42 @@ app.post('/api/files/upload', requireAuth, upload.array('files', 10), async (req
 
   // Expiry calculation
   let expiresAt: string | null = null;
-  const requestedDays = parseInt(expiryDays) || plan.retentionDays;
-  if (requestedDays > 0) {
-    const d = new Date();
-    d.setDate(d.getDate() + requestedDays);
+  let retentionType: 'permanent' | 'after_last_download' | 'fixed_days' = 'permanent';
+
+  if (isGuest) {
+    // Guest files retain for 30 days after last download (extends automatically upon download)
+    retentionType = 'after_last_download';
+    const d = new Date(Date.now() + GUEST_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     expiresAt = d.toISOString();
+  } else if (plan) {
+    if (plan.retentionDays === 0) {
+      // Free Starter & Pro & Enterprise default to Permanent (Unlimited Time - No Expiry)
+      if (expiryDays && parseInt(expiryDays) > 0) {
+        const d = new Date(Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000);
+        expiresAt = d.toISOString();
+        retentionType = 'fixed_days';
+      } else {
+        expiresAt = null;
+        retentionType = 'permanent';
+      }
+    } else {
+      const requestedDays = parseInt(expiryDays) || plan.retentionDays;
+      const d = new Date(Date.now() + requestedDays * 24 * 60 * 60 * 1000);
+      expiresAt = d.toISOString();
+      retentionType = 'fixed_days';
+    }
   }
 
-  // Password protection check (only allowed if plan supports it)
+  // Password protection check (only allowed for registered users if plan supports it)
   let filePasswordHash: string | undefined = undefined;
   if (password && password.trim() !== '') {
-    if (!plan.passwordProtection) {
+    if (isGuest) {
+      files.forEach(file => {
+        try { fs.unlinkSync(file.path); } catch (e) {}
+      });
+      return res.status(403).json({ error: 'Password protection requires an account. Sign up for free or upgrade to Pro to enable password protection.' });
+    }
+    if (!plan?.passwordProtection) {
       files.forEach(file => {
         try { fs.unlinkSync(file.path); } catch (e) {}
       });
@@ -903,16 +975,19 @@ async function syncUploadedFileToTgCloud(
       filePath: f.path,
       mimeType: finalMime,
       sizeBytes: f.size,
-      uploadedBy: user.id,
-      uploaderEmail: user.email,
-      uploaderName: user.name,
+      uploadedBy: user ? user.id : guestId,
+      uploaderEmail: user ? user.email : 'guest@tguploads.com',
+      uploaderName: user ? (user.name || user.email) : 'Guest Uploader',
       createdAt: new Date().toISOString(),
       expiresAt,
       downloadCount: 0,
       isPasswordProtected: !!filePasswordHash,
       passwordHash: filePasswordHash,
-      hasDirectLink: plan.directLinks,
-      description: description || ''
+      hasDirectLink: user ? (plan?.directLinks ?? false) : false,
+      description: description || '',
+      isGuest,
+      retentionType,
+      lastDownloadedAt: null
     };
 
     const saved = db.addFile(fileItem);
@@ -925,7 +1000,7 @@ async function syncUploadedFileToTgCloud(
       f.originalname,
       f.size,
       folderId,
-      description || `Uploaded via TG Uploads by ${user.name || user.email}`
+      description || `Uploaded via TG Uploads by ${user ? (user.name || user.email) : 'Guest'}`
     );
   }
 
@@ -938,12 +1013,24 @@ async function syncUploadedFileToTgCloud(
   });
 });
 
-app.get('/api/files/my-files', requireAuth, (req: Request, res: Response) => {
-  const user = (req as any).user as StoredUser;
-  // Recalculate strictly for this specific authenticated user
-  const totalStorageBytes = db.recalculateUserStorage(user.id);
-  const files = db.getFilesByUser(user.id);
-  
+app.get('/api/files/my-files', optionalAuth, (req: Request, res: Response) => {
+  const user = (req as any).user as StoredUser | undefined;
+  if (user) {
+    const totalStorageBytes = db.recalculateUserStorage(user.id);
+    const files = db.getFilesByUser(user.id);
+    const cleanFiles = files.map(f => {
+      const { filePath, passwordHash, ...clean } = f;
+      return clean;
+    });
+    return res.json({
+      files: cleanFiles,
+      totalStorageBytes
+    });
+  }
+
+  const rawGuestId = (req.headers['x-guest-id'] as string) || (req.ip as string) || 'guest_anon';
+  const files = db.getFilesByGuest(rawGuestId);
+  const totalStorageBytes = db.getGuestUsedStorage(rawGuestId);
   const cleanFiles = files.map(f => {
     const { filePath, passwordHash, ...clean } = f;
     return clean;
@@ -955,16 +1042,23 @@ app.get('/api/files/my-files', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-app.delete('/api/files/:id', requireAuth, async (req: Request, res: Response) => {
-  const user = (req as any).user as StoredUser;
+app.delete('/api/files/:id', optionalAuth, async (req: Request, res: Response) => {
+  const user = (req as any).user as StoredUser | undefined;
+  const rawGuestId = (req.headers['x-guest-id'] as string) || (req.ip as string) || 'guest_anon';
+  const guestId = rawGuestId.startsWith('guest_') ? rawGuestId : `guest_${rawGuestId}`;
+
   const file = db.getFileById(req.params.id);
 
   if (!file) {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  // Owner or Admin can delete
-  if (file.uploadedBy !== user.id && user.role !== 'admin') {
+  // Owner, Guest uploader, or Admin can delete
+  const isOwner = (user && file.uploadedBy === user.id) ||
+                  (user && user.role === 'admin') ||
+                  (!user && (file.uploadedBy === guestId || file.uploadedBy === rawGuestId));
+
+  if (!isOwner) {
     return res.status(403).json({ error: 'You are not authorized to delete this file' });
   }
 
@@ -1056,7 +1150,10 @@ app.get('/api/share/:shareToken', (req: Request, res: Response) => {
     isPasswordProtected: file.isPasswordProtected,
     hasDirectLink: file.hasDirectLink,
     description: file.description,
-    tgFileId: file.tgFileId
+    tgFileId: file.tgFileId,
+    isGuest: file.isGuest,
+    retentionType: file.retentionType,
+    lastDownloadedAt: file.lastDownloadedAt
   });
 });
 

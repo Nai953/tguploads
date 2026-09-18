@@ -68,6 +68,7 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
   const [copiedOrderId, setCopiedOrderId] = useState(false);
 
   // Price calculations
+  const isRenewal = Boolean(user && user.planId === plan.id && plan.priceMonthly > 0);
   const basePrice = cycle === 'yearly' ? (plan.priceYearly || plan.priceMonthly * 10) : plan.priceMonthly;
   const discountAmount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const finalPayable = Math.max(0, basePrice - discountAmount);
@@ -280,13 +281,15 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
       <div className="text-center space-y-3 max-w-2xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-semibold">
           <Crown className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Secure Plan Checkout & Activation</span>
+          <span>{isRenewal ? 'Subscription Extension & Renewal' : 'Secure Plan Checkout & Activation'}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Payment Details & Order Summary
+          {isRenewal ? `Renew ${plan.name} Subscription` : 'Payment Details & Order Summary'}
         </h1>
         <p className="text-sm text-slate-400 leading-relaxed">
-          Review your chosen tier, customize your billing duration, apply coupons for discounts or 100% free access, and complete activation.
+          {isRenewal
+            ? `Extend your active ${plan.name} subscription by 1 ${cycle === 'yearly' ? 'year' : 'month'}. Apply coupons for free renewals or complete with crypto.`
+            : 'Review your chosen tier, customize your billing duration, apply coupons for discounts or 100% free access, and complete activation.'}
         </p>
       </div>
 
@@ -299,13 +302,15 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
 
           <div className="space-y-2">
             <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
-              {appliedCoupon?.isFree ? 'Free Plan Activated' : 'Payment Confirmed'}
+              {appliedCoupon?.isFree ? (isRenewal ? 'Renewal Activated (100% Free)' : 'Free Plan Activated') : (isRenewal ? 'Renewal Confirmed' : 'Payment Confirmed')}
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Welcome to {plan.name}!
+              {isRenewal ? `${plan.name} Subscription Renewed!` : `Welcome to ${plan.name}!`}
             </h2>
             <p className="text-sm text-slate-300 max-w-md mx-auto">
-              Your storage quota has been upgraded to <strong className="text-cyan-300 font-semibold">{storageGB} GB</strong> with high-speed bandwidth and permanent file retention.
+              {isRenewal
+                ? `Your ${plan.name} subscription period has been successfully extended with ${storageGB} GB high-speed storage quota.`
+                : `Your storage quota has been upgraded to ${storageGB} GB with high-speed bandwidth and permanent file retention.`}
             </p>
           </div>
 
@@ -764,12 +769,12 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin text-slate-950" />
-                      <span>Activating Free Upgrade...</span>
+                      <span>{isRenewal ? 'Activating Free Renewal...' : 'Activating Free Upgrade...'}</span>
                     </>
                   ) : (
                     <>
                       <Gift className="w-5 h-5 text-slate-950" />
-                      <span>Claim Free Upgrade with Coupon</span>
+                      <span>{isRenewal ? 'Claim Free Renewal with Coupon' : 'Claim Free Upgrade with Coupon'}</span>
                     </>
                   )}
                 </button>
@@ -791,7 +796,7 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
                     ) : (
                       <>
                         <Coins className="w-5 h-5 text-slate-950" />
-                        <span>Proceed to OxaPay Crypto Checkout</span>
+                        <span>{isRenewal ? `Proceed to Renew via OxaPay Crypto (₹${finalPayable.toLocaleString('en-IN')})` : `Proceed to OxaPay Crypto Checkout (₹${finalPayable.toLocaleString('en-IN')})`}</span>
                       </>
                     )}
                   </button>

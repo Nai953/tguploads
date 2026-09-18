@@ -22,7 +22,8 @@ import {
   List,
   Edit2,
   AlertTriangle,
-  UploadCloud
+  UploadCloud,
+  Sparkles
 } from 'lucide-react';
 import { User, Plan, FileItem } from '../types.js';
 import { formatBytes, formatDate, getFileCategory } from '../lib/utils.js';
@@ -37,6 +38,7 @@ interface MyFilesSectionProps {
   onOpenUpload: () => void;
   onOpenPreview: (file: FileItem) => void;
   onOpenShareModal: (file: FileItem) => void;
+  onOpenAuth?: (mode: 'login' | 'register') => void;
 }
 
 export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
@@ -47,7 +49,8 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
   onRefreshFiles,
   onOpenUpload,
   onOpenPreview,
-  onOpenShareModal
+  onOpenShareModal,
+  onOpenAuth
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -84,7 +87,7 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
   });
 
   const copyShareLink = (shareToken: string, id: string) => {
-    const fullUrl = `${window.location.origin}/#/share/${shareToken}`;
+    const fullUrl = `${window.location.origin}/share/${shareToken}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -127,22 +130,53 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
     }
   };
 
-  const usedBytes = user?.usedStorageBytes || 0;
-  const limitBytes = plan?.storageLimitBytes || 5 * 1024 * 1024 * 1024;
-  const usagePercent = Math.min(100, Math.round((usedBytes / limitBytes) * 100));
+  const guestCalculatedBytes = files.reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
+  const usedBytes = user ? (user.usedStorageBytes ?? guestCalculatedBytes) : guestCalculatedBytes;
+  const limitBytes = user ? (plan?.storageLimitBytes || 50 * 1024 * 1024 * 1024) : 1 * 1024 * 1024 * 1024;
+  const usagePercent = Math.min(100, Math.round((usedBytes / Math.max(1, limitBytes)) * 100));
 
   return (
     <div id="my-files-container" className="max-w-7xl mx-auto space-y-6">
       
+      {/* Guest Mode Callout */}
+      {!user && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-cyan-950/50 via-slate-900 to-blue-950/40 border border-cyan-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Guest File Session (30 Days Retention)</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold">1 GB Max</span>
+              </h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Your guest files are saved for 30 days after the last download. Create a free account to unlock <strong>50 GB storage</strong> with <strong>Unlimited Time (Permanent)</strong> retention!
+              </p>
+            </div>
+          </div>
+          {onOpenAuth && (
+            <button
+              onClick={() => onOpenAuth('register')}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all shrink-0 cursor-pointer"
+            >
+              Sign Up Free (Unlimited Time)
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Top Header & Storage Summary */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl">
         <div className="space-y-1">
           <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
             <FolderOpen className="w-6 h-6 text-cyan-400" />
-            My Stored Files
+            {user ? 'My Stored Files' : 'Guest Uploaded Files'}
           </h2>
           <p className="text-xs text-slate-400">
-            Manage your uploaded content, download links, passwords, and retention periods.
+            {user 
+              ? 'Manage your uploaded content, download links, passwords, and retention periods.' 
+              : 'Files uploaded in this browser session. Upgrade to an account for permanent links & 50 GB storage.'}
           </p>
         </div>
 
@@ -164,7 +198,7 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
                 style={{ width: `${Math.max(3, usagePercent)}%` }}
               />
             </div>
-            <p className="text-[10px] text-slate-500">Plan: {plan?.name || 'Free Starter'}</p>
+            <p className="text-[10px] text-slate-500">Plan: {user ? (plan?.name || 'Free Starter') : 'Guest Mode (1 GB)'}</p>
           </div>
           <button
             onClick={onOpenUpload}
@@ -299,8 +333,10 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
                     <span>{formatBytes(file.sizeBytes)}</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-500" />
-                      {file.expiresAt ? `Expires ${formatDate(file.expiresAt).split(',')[0]}` : 'Permanent'}
+                      <Clock className="w-3 h-3 text-cyan-500" />
+                      {file.isGuest || file.retentionType === 'after_last_download'
+                        ? `30d after last dl (${file.expiresAt ? formatDate(file.expiresAt).split(',')[0] : '30d'})`
+                        : file.expiresAt ? `Expires ${formatDate(file.expiresAt).split(',')[0]}` : 'Unlimited Time'}
                     </span>
                   </div>
 
@@ -409,7 +445,11 @@ export const MyFilesSection: React.FC<MyFilesSectionProps> = ({
                       </td>
                       <td className="p-4 font-mono">{formatBytes(file.sizeBytes)}</td>
                       <td className="p-4 text-slate-400">{formatDate(file.createdAt).split(',')[0]}</td>
-                      <td className="p-4 text-slate-400">{file.expiresAt ? formatDate(file.expiresAt).split(',')[0] : 'Permanent'}</td>
+                      <td className="p-4 text-slate-400">
+                        {file.isGuest || file.retentionType === 'after_last_download'
+                          ? <span className="text-cyan-300">30d after last dl</span>
+                          : file.expiresAt ? formatDate(file.expiresAt).split(',')[0] : <span className="text-emerald-400 font-medium">Unlimited Time</span>}
+                      </td>
                       <td className="p-4 font-mono">{file.downloadCount}</td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1">

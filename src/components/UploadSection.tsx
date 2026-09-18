@@ -41,7 +41,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const [dragOver, setDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [password, setPassword] = useState('');
-  const [expiryDays, setExpiryDays] = useState<string>('30');
+  const [expiryDays, setExpiryDays] = useState<string>('0');
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -57,19 +57,23 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   const effectivePlan: Plan = plan || {
     id: 'guest',
-    name: 'Free Starter (Guest)',
-    description: 'Sign up to get 5 GB free storage',
-    storageLimitBytes: 5 * 1024 * 1024 * 1024,
-    maxFileSizeBytes: 500 * 1024 * 1024,
+    name: 'Guest (No Account)',
+    description: 'Instant uploads up to 50 MB with 1 GB storage & 30-day retention',
+    storageLimitBytes: 1024 * 1024 * 1024, // 1 GB
+    maxFileSizeBytes: 50 * 1024 * 1024,    // 50 MB
     downloadSpeed: 'Standard',
-    retentionDays: 30,
+    retentionDays: 30,                     // 30 days after last download
     passwordProtection: false,
     directLinks: false,
     prioritySupport: false,
     priceMonthly: 0,
     priceYearly: 0,
     active: true,
-    features: []
+    features: [
+      '50 MB Maximum File Size',
+      '1 GB Total Storage Quota',
+      '30-Day Retention After Last Download (Extends on Download)'
+    ]
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -102,17 +106,23 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     setError(null);
     const validFiles: File[] = [];
     let oversizedFile: string | null = null;
+    let oversizedFileSize = 0;
 
     for (const f of files) {
       if (f.size > effectivePlan.maxFileSizeBytes) {
         oversizedFile = f.name;
+        oversizedFileSize = f.size;
         break;
       }
       validFiles.push(f);
     }
 
     if (oversizedFile) {
-      setError(`File "${oversizedFile}" exceeds your plan limit of ${formatBytes(effectivePlan.maxFileSizeBytes)}. Upgrade your plan to upload larger files.`);
+      if (!user) {
+        setError(`File "${oversizedFile}" (${(oversizedFileSize / (1024 * 1024)).toFixed(1)} MB) exceeds the 50 MB limit for non-registered users. Create a free account to upload files up to 500 MB with Unlimited Time retention!`);
+      } else {
+        setError(`File "${oversizedFile}" exceeds your plan limit of ${formatBytes(effectivePlan.maxFileSizeBytes)}. Upgrade your plan to upload larger files.`);
+      }
     }
 
     setSelectedFiles(prev => [...prev, ...validFiles]);
@@ -123,11 +133,6 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   };
 
   const handleUpload = async () => {
-    if (!user) {
-      onOpenAuth('register');
-      return;
-    }
-
     if (selectedFiles.length === 0) return;
 
     setError(null);
@@ -198,7 +203,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   };
 
   const copyShareLink = (shareToken: string, id: string) => {
-    const fullUrl = `${window.location.origin}/#/share/${shareToken}`;
+    const fullUrl = `${window.location.origin}/share/${shareToken}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -219,14 +224,39 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           Fast, Secure & <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">Encrypted</span> File Sharing
         </h1>
         <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
-          Upload any file type with lightning-fast speeds. Every user receives a generous <span className="text-cyan-300 font-semibold">Free 5 GB Plan</span> with instant direct shareable links.
+          Upload any file type with lightning-fast speeds. Every user receives a generous <span className="text-cyan-300 font-semibold">Free 50 GB Plan</span> with instant direct shareable links and Unlimited Time file retention.
         </p>
+
+        {/* Guest Mode Banner */}
+        {!user && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-blue-950/30 to-indigo-950/40 border border-cyan-500/30 max-w-2xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold uppercase tracking-wider">
+                  Guest Upload Enabled
+                </span>
+                <span className="text-xs font-semibold text-white">No registration required</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Guests can upload up to <strong className="text-cyan-300 font-semibold">50 MB per file</strong> (max 1 GB storage) with <strong className="text-cyan-300 font-semibold">30-day retention after last download</strong>.
+              </p>
+            </div>
+            <button
+              id="btn-guest-signup-cta"
+              onClick={() => onOpenAuth('register')}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs shrink-0 shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Get Unlimited Time Free</span>
+            </button>
+          </div>
+        )}
 
         {/* Current Plan Badge Pill */}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
             <Crown className="w-4 h-4 text-amber-400" />
-            <span>Active Plan: <strong>{effectivePlan.name}</strong></span>
+            <span>Active: <strong>{effectivePlan.name}</strong></span>
             <span className="text-slate-500">•</span>
             <span>Max File: <strong>{formatBytes(effectivePlan.maxFileSizeBytes)}</strong></span>
             <span className="text-slate-500">•</span>
@@ -236,9 +266,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <button
             id="btn-view-plans-banner"
             onClick={onOpenPlans}
-            className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
+            className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <span>Upgrade limits</span>
+            <span>View All Plans</span>
             <ExternalLink className="w-3 h-3" />
           </button>
         </div>
@@ -390,28 +420,39 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
             {/* Retention Expiry */}
             <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                Link Retention / Expiry
-              </label>
-              <select
-                id="upload-expiry-select"
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors cursor-pointer"
-              >
-                <option value="7">7 Days</option>
-                <option value="14">14 Days</option>
-                <option value="30">30 Days (Default)</option>
-                {effectivePlan.retentionDays === 0 ? (
-                  <>
-                    <option value="90">90 Days</option>
-                    <option value="0">Permanent (No Expiration)</option>
-                  </>
-                ) : (
-                  <option value="0" disabled>Permanent (Upgrade to Pro)</option>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  Link Retention / Expiry
+                </label>
+                {!user && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAuth('register')}
+                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                  >
+                    Get Unlimited Time
+                  </button>
                 )}
-              </select>
+              </div>
+              {!user ? (
+                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+                  <span>30 Days after last download (extends on download)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-semibold">Guest</span>
+                </div>
+              ) : (
+                <select
+                  id="upload-expiry-select"
+                  value={expiryDays}
+                  onChange={(e) => setExpiryDays(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors cursor-pointer"
+                >
+                  <option value="0">Unlimited Time (Permanent / Never Expires)</option>
+                  <option value="30">30 Days</option>
+                  <option value="14">14 Days</option>
+                  <option value="7">7 Days</option>
+                </select>
+              )}
             </div>
           </div>
 
@@ -482,11 +523,11 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
           {/* Upload Submit Button */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-slate-500 text-center sm:text-left">
+            <div className="text-xs text-slate-400 text-center sm:text-left">
               {user ? (
-                <span>Uploading under <strong>{user.email}</strong></span>
+                <span>Uploading under <strong>{user.email}</strong> • Unlimited Time retention</span>
               ) : (
-                <span className="text-amber-400">Account required to start upload</span>
+                <span className="text-cyan-400 font-medium">Guest upload active • 30-day retention after last download</span>
               )}
             </div>
 
@@ -501,15 +542,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Encrypting & Uploading...</span>
                 </>
-              ) : user ? (
-                <>
-                  <UploadCloud className="w-4 h-4" />
-                  <span>Upload {selectedFiles.length} File{selectedFiles.length > 1 ? 's' : ''}</span>
-                </>
               ) : (
                 <>
-                  <Lock className="w-4 h-4" />
-                  <span>Sign Up Free to Upload</span>
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Upload {selectedFiles.length} File{selectedFiles.length > 1 ? 's' : ''} {user ? '' : 'as Guest'}</span>
                 </>
               )}
             </button>
@@ -526,8 +562,21 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
 
           <div className="space-y-3">
+            {!user && (
+              <div className="p-3 rounded-2xl bg-cyan-950/30 border border-cyan-500/20 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <p className="text-slate-300">
+                  <span className="text-cyan-400 font-semibold">Guest Notice:</span> Files uploaded as guest retain for 30 days after the last download.
+                </p>
+                <button
+                  onClick={() => onOpenAuth('register')}
+                  className="text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer shrink-0"
+                >
+                  Sign Up for Unlimited Time & 50 GB
+                </button>
+              </div>
+            )}
             {recentlyUploaded.map((file) => {
-              const shareUrl = `${window.location.origin}/#/share/${file.shareToken}`;
+              const shareUrl = `${window.location.origin}/share/${file.shareToken}`;
               const isCopied = copiedId === file.id;
 
               return (
@@ -574,9 +623,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           <div className="w-10 h-10 rounded-2xl bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
             <Crown className="w-5 h-5" />
           </div>
-          <h4 className="text-sm font-bold text-white">Free 5 GB Plan Included</h4>
+          <h4 className="text-sm font-bold text-white">Free 50 GB Plan Included</h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Every user who creates an account is granted the Free Starter plan with 5 GB storage, 500 MB per file, and high-speed delivery.
+            Every user who signs up receives the Free Starter plan with 50 GB cloud storage, 500 MB per file, and Unlimited Time permanent retention (vs. 30 days for guests).
           </p>
         </div>
 
