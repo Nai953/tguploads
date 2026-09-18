@@ -13,7 +13,6 @@ import {
   Copy, 
   CheckCircle2, 
   Clock, 
-  Zap, 
   Coins,
   Gift,
   Lock,
@@ -61,9 +60,7 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
   const [activeOrder, setActiveOrder] = useState<PaymentOrder | null>(null);
   const [payLink, setPayLink] = useState<string | null>(null);
   const [trackId, setTrackId] = useState<string | number | null>(null);
-  const [isSandbox, setIsSandbox] = useState(false);
   const [isPaidSuccess, setIsPaidSuccess] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
   const [pollingStatus, setPollingStatus] = useState<'pending' | 'paying' | 'paid' | 'expired'>('pending');
   const [copiedOrderId, setCopiedOrderId] = useState(false);
 
@@ -192,7 +189,6 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
         });
         setPayLink(res.payLink || null);
         setTrackId(res.trackId || null);
-        setIsSandbox(Boolean(res.sandbox));
       } else {
         setInvoiceError('Unable to generate payment invoice. Please try again.');
       }
@@ -230,26 +226,6 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
 
     return () => clearInterval(interval);
   }, [activeOrder, isPaidSuccess]);
-
-  // Sandbox simulation test
-  const handleSimulateSandboxPayment = async () => {
-    if (!activeOrder) return;
-    setIsSimulating(true);
-    try {
-      const res = await api.simulatePayment(activeOrder.id);
-      if (res.success) {
-        setIsPaidSuccess(true);
-        setPollingStatus('paid');
-        if (res.user && res.plan) {
-          onPlanUpdated(res.plan, res.user);
-        }
-      }
-    } catch (err: any) {
-      setInvoiceError('Sandbox simulation failed: ' + err.message);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
 
   const handleCopyOrderId = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -428,30 +404,6 @@ export const PaymentDetailsPage: React.FC<PaymentDetailsPageProps> = ({
             </div>
             <span className="font-semibold text-cyan-400 uppercase tracking-wider text-[11px]">{pollingStatus}</span>
           </div>
-
-          {/* Sandbox Test Action (if sandbox) */}
-          {isSandbox && (
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5" /> Sandbox Simulation Mode Active
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase">Test Mode</span>
-              </div>
-              <p className="text-xs text-slate-300">
-                You can test instantaneous completion without sending real crypto:
-              </p>
-              <button
-                id="btn-simulate-sandbox-payment"
-                onClick={handleSimulateSandboxPayment}
-                disabled={isSimulating}
-                className="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
-              >
-                {isSimulating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                <span>Simulate Successful Payment (Instant Upgrade)</span>
-              </button>
-            </div>
-          )}
 
           <div className="pt-2 text-center">
             <button

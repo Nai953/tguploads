@@ -135,12 +135,12 @@ function activateOrderForUser(order: PaymentOrder) {
   });
 
   if (order.couponCode) {
-    db.incrementCouponUses(order.couponCode);
+    db.incrementCouponUses(order.couponCode, order.userId);
   }
 }
 
 // Evaluate Coupon Helper
-function evaluateCoupon(code: string, plan: Plan, cycle: 'monthly' | 'yearly') {
+function evaluateCoupon(code: string, plan: Plan, cycle: 'monthly' | 'yearly', userId?: string) {
   if (!code || !code.trim()) return { valid: false, error: 'Coupon code is required' };
   const cleanCode = code.trim().toUpperCase();
   const coupon = db.getCouponByCode(cleanCode);
@@ -155,6 +155,16 @@ function evaluateCoupon(code: string, plan: Plan, cycle: 'monthly' | 'yearly') {
   }
   if (coupon.maxUses > 0 && (coupon.usedCount || 0) >= coupon.maxUses) {
     return { valid: false, error: `Coupon code "${cleanCode}" has reached maximum redemptions limit` };
+  }
+  // Check Per-User Redemption Limit
+  if (userId && coupon.maxUsesPerUser && coupon.maxUsesPerUser > 0) {
+    const userUses = db.getUserCouponUses(cleanCode, userId);
+    if (userUses >= coupon.maxUsesPerUser) {
+      const msg = coupon.maxUsesPerUser === 1
+        ? `You have already redeemed coupon "${cleanCode}". This coupon code is limited to 1 use per user account.`
+        : `You have reached the maximum allowed limit of ${coupon.maxUsesPerUser} redemptions for coupon "${cleanCode}".`;
+      return { valid: false, error: msg };
+    }
   }
   if (coupon.applicablePlanIds && coupon.applicablePlanIds.length > 0 && !coupon.applicablePlanIds.includes(plan.id) && !coupon.applicablePlanIds.includes('all')) {
     return { valid: false, error: `Coupon "${cleanCode}" is not applicable to the ${plan.name} tier` };
@@ -237,7 +247,7 @@ app.get('/api/site/settings', (req: Request, res: Response) => {
     currency: settings.currency || 'INR',
     oxapayEnabled: settings.oxapayEnabled ?? true,
     oxapayConfigured: Boolean((settings.oxapayApiKey || process.env.OXAPAY_API_KEY || '').trim()),
-    oxapaySandbox: Boolean(settings.oxapaySandbox),
+    oxapaySandbox: false,
     customHeadCode: settings.customHeadCode || '',
     adsTxt: settings.adsTxt || '',
     adsEnabled: settings.adsEnabled ?? true,
@@ -410,6 +420,7 @@ app.post('/api/user/upgrade-plan', requireAuth, (req: Request, res: Response) =>
 // ==========================================
 app.post('/api/coupons/validate', requireAuth, (req: Request, res: Response) => {
   try {
+    const user = (req as any).user as StoredUser;
     const { code, planId, billingCycle } = req.body;
     if (!code || !code.trim()) {
       return res.status(400).json({ valid: false, error: 'Please enter a coupon code.' });
@@ -421,7 +432,7 @@ app.post('/api/coupons/validate', requireAuth, (req: Request, res: Response) => 
     }
 
     const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const evalRes = evaluateCoupon(code, plan, cycle);
+    const evalRes = evaluateCoupon(code, plan, cycle, user?.id);
 
     if (!evalRes.valid) {
       return res.status(400).json(evalRes);
@@ -485,7 +496,7 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
     let appliedCoupon: Coupon | null = null;
 
     if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
-      const evalRes = evaluateCoupon(couponCode, targetPlan, cycle);
+      const evalRes = evaluateCoupon(couponCode, targetPlan, cycle, user.id);
       if (!evalRes.valid) {
         return res.status(400).json({ error: evalRes.error });
       }
@@ -572,28 +583,8 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
     const returnUrl = `${baseUrl}/#/payment-complete?orderId=${orderId}`;
 
     if (!apiKey) {
-      // If sandbox mode is enabled without key, provide sandbox simulation
-      if (settings.oxapaySandbox) {
-        order.trackId = 'demo_' + Date.now();
-        order.payLink = `${baseUrl}/#/payment-demo?orderId=${orderId}`;
-        db.addOrder(order);
-        return res.json({
-          success: true,
-          orderId,
-          trackId: order.trackId,
-          payLink: order.payLink,
-          amount: finalAmount,
-          originalAmount: baseAmount,
-          discountAmount,
-          couponCode: appliedCoupon ? appliedCoupon.code : undefined,
-          currency,
-          sandbox: true,
-          plan: targetPlan
-        });
-      }
-
       return res.status(400).json({
-        error: 'OxaPay Merchant API key is not configured. Please configure your OxaPay API key in the Admin Panel (Settings > OxaPay Gateway).'
+        error: 'OxaPay Merchant API key is not configured. Please enter your OxaPay Merchant API Key in the Admin Panel (Settings > OxaPay Gateway).'
       });
     }
 
@@ -605,34 +596,12 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
       email: user.email,
       description: `TG Uploads: ${targetPlan.name} (${cycle}) - ₹${finalAmount} INR${appliedCoupon ? ` (Discount: ₹${discountAmount} via ${appliedCoupon.code})` : ''}`,
       callbackUrl,
-      returnUrl,
-      sandbox: settings.oxapaySandbox
+      returnUrl
     });
 
     if (!invoiceResult.success || !invoiceResult.payLink) {
-      // If OxaPay rejected (e.g. invalid key or currency conversion) and sandbox mode is enabled, fall back to sandbox demo
-      if (settings.oxapaySandbox) {
-        order.trackId = 'demo_' + Date.now();
-        order.payLink = `${baseUrl}/#/payment-demo?orderId=${orderId}`;
-        db.addOrder(order);
-        return res.json({
-          success: true,
-          orderId,
-          trackId: order.trackId,
-          payLink: order.payLink,
-          amount: finalAmount,
-          originalAmount: baseAmount,
-          discountAmount,
-          couponCode: appliedCoupon ? appliedCoupon.code : undefined,
-          currency,
-          sandbox: true,
-          notice: `Live OxaPay returned notice: ${invoiceResult.error}. Using Sandbox simulation mode.`,
-          plan: targetPlan
-        });
-      }
-
       return res.status(400).json({
-        error: invoiceResult.error || 'Failed to create payment invoice with OxaPay. Please check merchant key and settings.'
+        error: invoiceResult.error || 'Failed to create payment invoice with OxaPay. Please verify your OxaPay Merchant API Key in Admin Settings.'
       });
     }
 
@@ -1644,7 +1613,18 @@ app.get('/api/admin/coupons', requireAdmin, (req: Request, res: Response) => {
 });
 
 app.post('/api/admin/coupons', requireAdmin, (req: Request, res: Response) => {
-  const { code, description, discountType, discountValue, applicablePlanIds, applicableCycle, maxUses, expiresAt, active } = req.body;
+  const { 
+    code, 
+    description, 
+    discountType, 
+    discountValue, 
+    applicablePlanIds, 
+    applicableCycle, 
+    maxUses, 
+    maxUsesPerUser, 
+    expiresAt, 
+    active 
+  } = req.body;
   if (!code || !code.trim()) {
     return res.status(400).json({ error: 'Coupon code is required' });
   }
@@ -1667,7 +1647,9 @@ app.post('/api/admin/coupons', requireAdmin, (req: Request, res: Response) => {
     applicablePlanIds: Array.isArray(applicablePlanIds) ? applicablePlanIds : [],
     applicableCycle: (applicableCycle === 'monthly' || applicableCycle === 'yearly') ? applicableCycle : 'all',
     maxUses: Math.max(0, parseInt(String(maxUses)) || 0),
+    maxUsesPerUser: typeof maxUsesPerUser !== 'undefined' ? Math.max(0, parseInt(String(maxUsesPerUser)) || 0) : 1,
     usedCount: 0,
+    usedUserIds: {},
     expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
     active: active !== false,
     createdAt: new Date().toISOString()
@@ -1685,6 +1667,12 @@ app.put('/api/admin/coupons/:id', requireAdmin, (req: Request, res: Response) =>
   }
   if (updates.discountType === 'free') {
     updates.discountValue = 100;
+  }
+  if (typeof updates.maxUses !== 'undefined') {
+    updates.maxUses = Math.max(0, parseInt(String(updates.maxUses)) || 0);
+  }
+  if (typeof updates.maxUsesPerUser !== 'undefined') {
+    updates.maxUsesPerUser = Math.max(0, parseInt(String(updates.maxUsesPerUser)) || 0);
   }
   if (updates.expiresAt !== undefined) {
     updates.expiresAt = updates.expiresAt ? new Date(updates.expiresAt).toISOString() : null;

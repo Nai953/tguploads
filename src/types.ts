@@ -101,8 +101,10 @@ export interface Coupon {
   discountValue: number; // e.g. 100 for 100%, or fixed amount in INR e.g. 200
   applicablePlanIds: string[]; // empty array or ['all'] means applicable to all plans
   applicableCycle: 'all' | 'monthly' | 'yearly';
-  maxUses: number; // 0 = unlimited
+  maxUses: number; // 0 = unlimited total uses
+  maxUsesPerUser?: number; // 0 = unlimited per user, 1 = once per user account, etc.
   usedCount: number;
+  usedUserIds?: Record<string, number>; // map of userId -> count of times redeemed
   expiresAt: string | null; // ISO date string or null
   active: boolean;
   createdAt: string;

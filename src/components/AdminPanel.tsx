@@ -42,7 +42,8 @@ import {
   Ticket,
   Tag,
   Gift,
-  Percent
+  Percent,
+  UserCheck
 } from 'lucide-react';
 import { User, Plan, FileItem, SiteSettings, AdminStats, PaymentOrder, PublicRootFile, Coupon } from '../types.js';
 import { formatBytes, formatDate } from '../lib/utils.js';
@@ -113,6 +114,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     applicablePlanIds: [] as string[],
     applicableCycle: 'all' as 'all' | 'monthly' | 'yearly',
     maxUses: 0,
+    maxUsesPerUser: 1,
     expiresAt: '',
     active: true
   });
@@ -296,6 +298,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       applicablePlanIds: [],
       applicableCycle: 'all',
       maxUses: 0,
+      maxUsesPerUser: 1,
       expiresAt: '',
       active: true
     });
@@ -312,6 +315,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       applicablePlanIds: coupon.applicablePlanIds || [],
       applicableCycle: coupon.applicableCycle || 'all',
       maxUses: coupon.maxUses || 0,
+      maxUsesPerUser: typeof coupon.maxUsesPerUser === 'number' ? coupon.maxUsesPerUser : 1,
       expiresAt: coupon.expiresAt ? coupon.expiresAt.substring(0, 10) : '',
       active: coupon.active !== false
     });
@@ -334,6 +338,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         applicablePlanIds: couponForm.applicablePlanIds,
         applicableCycle: couponForm.applicableCycle,
         maxUses: Math.max(0, parseInt(String(couponForm.maxUses)) || 0),
+        maxUsesPerUser: Math.max(0, parseInt(String(couponForm.maxUsesPerUser)) || 0),
         expiresAt: couponForm.expiresAt ? new Date(couponForm.expiresAt).toISOString() : null,
         active: couponForm.active
       };
@@ -1041,7 +1046,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {coupon.maxUsesPerUser && coupon.maxUsesPerUser > 0 ? (
+                            <span 
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1"
+                              title={`${coupon.maxUsesPerUser} redemption${coupon.maxUsesPerUser > 1 ? 's' : ''} allowed per user account`}
+                            >
+                              <UserCheck className="w-3 h-3 text-purple-400" />
+                              {coupon.maxUsesPerUser === 1 ? '1 / User' : `${coupon.maxUsesPerUser} / User`}
+                            </span>
+                          ) : (
+                            <span 
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400"
+                              title="Unlimited redemptions per user account"
+                            >
+                              Multi-use / User
+                            </span>
+                          )}
+
                           {isExpired ? (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300">
                               Expired
@@ -1106,6 +1128,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <span className="text-slate-500">Usage Limit:</span>
                           <span className="text-slate-200 font-medium">
                             {coupon.usedCount} used {coupon.maxUses > 0 ? `of ${coupon.maxUses}` : '(Unlimited)'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-purple-400" />
+                            Per User Limit:
+                          </span>
+                          <span className="text-purple-300 font-medium">
+                            {coupon.maxUsesPerUser && coupon.maxUsesPerUser > 0
+                              ? `${coupon.maxUsesPerUser} use${coupon.maxUsesPerUser > 1 ? 's' : ''} per user account`
+                              : 'Unlimited (no per-user limit)'}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -2519,29 +2552,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Gateway Toggles */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-white">Enable OxaPay Payments</p>
-                  <p className="text-[11px] text-slate-400">Allow users to pay with crypto on plan upgrade.</p>
+                  <p className="text-xs font-semibold text-white">Enable OxaPay Merchant Gateway</p>
+                  <p className="text-[11px] text-slate-400">Accept real-time cryptocurrency payments (USDT, BTC, ETH, TRX) converted from INR.</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={settings.oxapayEnabled ?? true}
-                  onChange={(e) => setSettings({ ...settings, oxapayEnabled: e.target.checked })}
-                  className="w-4 h-4 rounded text-amber-500 focus:ring-0"
-                />
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold text-white">Sandbox / Demo Mode</p>
-                  <p className="text-[11px] text-slate-400">Simulate invoices and instant payments for testing.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.oxapaySandbox ?? false}
-                  onChange={(e) => setSettings({ ...settings, oxapaySandbox: e.target.checked })}
+                  onChange={(e) => setSettings({ ...settings, oxapayEnabled: e.target.checked, oxapaySandbox: false })}
                   className="w-4 h-4 rounded text-amber-500 focus:ring-0"
                 />
               </div>
@@ -3264,8 +3284,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
-              {/* Applicable Billing Cycle & Max Uses */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Applicable Billing Cycle, Max Uses & Per-User Limit */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-300 mb-1">Billing Cycle</label>
                   <select
@@ -3280,15 +3300,84 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Max Redemptions (0 = Unlimited)</label>
+                  <label className="block font-semibold text-slate-300 mb-1">Total Global Limit</label>
                   <input
                     type="number"
                     min="0"
+                    placeholder="0 = Unlimited"
                     value={couponForm.maxUses}
                     onChange={(e) => setCouponForm({ ...couponForm, maxUses: Number(e.target.value) })}
                     className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-purple-500"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">0 = Unlimited across platform</p>
                 </div>
+
+                <div>
+                  <label className="block font-semibold text-purple-300 mb-1 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Per User Limit</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="1"
+                    value={couponForm.maxUsesPerUser}
+                    onChange={(e) => setCouponForm({ ...couponForm, maxUsesPerUser: Number(e.target.value) })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-purple-500/50 text-white text-xs focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 font-medium"
+                  />
+                  <p className="text-[10px] text-purple-400/90 mt-1">Max redemptions per account</p>
+                </div>
+              </div>
+
+              {/* Per-User Limit Quick Policy Selector */}
+              <div className="p-3 rounded-2xl bg-purple-950/20 border border-purple-500/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-purple-300 font-semibold text-xs flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+                    Per User Policy Presets
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    Current: {couponForm.maxUsesPerUser === 0 ? 'Unlimited' : `${couponForm.maxUsesPerUser} per user`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCouponForm({ ...couponForm, maxUsesPerUser: 1 })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                      couponForm.maxUsesPerUser === 1
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    1 Use Per User (Recommended)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCouponForm({ ...couponForm, maxUsesPerUser: 2 })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                      couponForm.maxUsesPerUser === 2
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    2 Uses Per User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCouponForm({ ...couponForm, maxUsesPerUser: 0 })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                      couponForm.maxUsesPerUser === 0
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    Unlimited Per User (0)
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Setting this to <strong className="text-purple-300">1</strong> ensures each user account can only redeem this coupon once. Subsequent attempts by the same user will be rejected at checkout.
+                </p>
               </div>
 
               {/* Expiration Date & Active switch */}

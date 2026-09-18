@@ -66,19 +66,23 @@ export async function createOxaPayInvoice(options: OxaPayInvoiceOptions): Promis
     const data: any = await response.json();
 
     // OxaPay returns result: 100 on success
-    if (data && (data.result === 100 || data.result === '100') && data.payLink) {
+    const payLink = data.payLink || data.pay_link || data.paymentUrl;
+    const trackId = data.trackId || data.track_id;
+
+    if (data && (data.result === 100 || data.result === '100') && payLink) {
       return {
         success: true,
-        trackId: data.trackId,
-        payLink: data.payLink,
+        trackId: trackId,
+        payLink: payLink,
         raw: data
       };
     }
 
     // Try fallback v1 endpoint if merchants/request didn't succeed
-    if (!data.payLink) {
+    if (!payLink) {
       const v1Payload = {
         merchant_api_key: apiKey,
+        merchant: apiKey,
         amount: Number(amount),
         currency: currency || 'INR',
         lifetime: 60,
@@ -99,11 +103,14 @@ export async function createOxaPayInvoice(options: OxaPayInvoiceOptions): Promis
       });
 
       const v1Data: any = await v1Res.json();
-      if (v1Data && (v1Data.result === 100 || v1Data.result === '100') && v1Data.payLink) {
+      const v1PayLink = v1Data.payLink || v1Data.pay_link || v1Data.paymentUrl;
+      const v1TrackId = v1Data.trackId || v1Data.track_id;
+
+      if (v1Data && (v1Data.result === 100 || v1Data.result === '100') && v1PayLink) {
         return {
           success: true,
-          trackId: v1Data.trackId,
-          payLink: v1Data.payLink,
+          trackId: v1TrackId,
+          payLink: v1PayLink,
           raw: v1Data
         };
       }
@@ -111,7 +118,7 @@ export async function createOxaPayInvoice(options: OxaPayInvoiceOptions): Promis
 
     return {
       success: false,
-      error: data.message || data.error || 'OxaPay did not return a valid payment link',
+      error: data.message || data.error || 'OxaPay API Error: Please ensure a valid Merchant API Key is set in Admin Settings.',
       raw: data
     };
   } catch (err: any) {

@@ -39,7 +39,6 @@ export const OxaPayCheckoutModal: React.FC<OxaPayCheckoutModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<PaymentOrder | null>(null);
   const [payLink, setPayLink] = useState<string | null>(null);
-  const [isSandbox, setIsSandbox] = useState<boolean>(false);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paying' | 'paid' | 'expired' | 'failed'>('pending');
   const pollTimerRef = useRef<any>(null);
 
@@ -101,7 +100,6 @@ export const OxaPayCheckoutModal: React.FC<OxaPayCheckoutModalProps> = ({
 
       if (res.success && res.orderId) {
         setPayLink(res.payLink || null);
-        setIsSandbox(Boolean(res.sandbox));
         setOrder({
           id: res.orderId,
           userId: user.id,
@@ -119,7 +117,7 @@ export const OxaPayCheckoutModal: React.FC<OxaPayCheckoutModalProps> = ({
         });
 
         // Automatically open payment link in new window if available
-        if (res.payLink && !res.sandbox) {
+        if (res.payLink) {
           window.open(res.payLink, '_blank', 'noopener,noreferrer');
         }
       } else {

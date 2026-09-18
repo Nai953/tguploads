@@ -141,18 +141,6 @@ export const api = {
       user?: User;
     }>(`/api/payments/oxapay/check-status/${orderId}`),
 
-  simulatePayment: (orderId: string) =>
-    request<{
-      success: boolean;
-      message: string;
-      order: PaymentOrder;
-      user?: User;
-      plan?: Plan;
-    }>('/api/payments/oxapay/simulate-payment', {
-      method: 'POST',
-      body: JSON.stringify({ orderId })
-    }),
-
   // Files
   uploadFiles: (formData: FormData) =>
     request<{ message: string; files: FileItem[] }>('/api/files/upload', {

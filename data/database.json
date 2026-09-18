@@ -9,8 +9,8 @@
       "usedStorageBytes": 183865,
       "createdAt": "2026-09-15T15:43:16.974Z",
       "isSuspended": false,
-      "passwordHash": "d00d221341f790f3cfb97baa68d57ef664a88e489bdf0175ff565df588797502d95f64847f0635339ccb98c3c85522409271dd753c43c369f61be08a71f58d8a",
-      "salt": "b0e66d18833a84a6c561b7818f26d8e2"
+      "passwordHash": "40ea8e258cf72053f264a98641b741c49474fa348b7b20692e64a1c6de589ff41e14485908e830420acfa26ec9a345f48a96799269fa38cab6ce6434f40d6019",
+      "salt": "178586b43eedddcee1215a23a0ab8e47"
     },
     {
       "id": "usr_9dc766c73563eeac",
@@ -44,10 +44,10 @@
       "id": "plan_free",
       "name": "Free Starter",
       "description": "Perfect for quick file transfers and casual sharing.",
-      "storageLimitBytes": 5368709120,
+      "storageLimitBytes": 53687091200,
       "maxFileSizeBytes": 524288000,
       "downloadSpeed": "Standard (10 MB/s)",
-      "retentionDays": 30,
+      "retentionDays": 0,
       "passwordProtection": false,
       "directLinks": false,
       "prioritySupport": false,
@@ -57,9 +57,9 @@
       "isDefault": true,
       "active": true,
       "features": [
-        "5 GB Secure Cloud Storage",
+        "50 GB Secure Cloud Storage",
         "500 MB Maximum File Size",
-        "30-Day Auto Retention",
+        "Unlimited Time (Permanent - No Expiry)",
         "High-Speed CDN Transfers",
         "QR Code & Quick Share Links",
         "Direct In-Browser Previews"
@@ -264,6 +264,59 @@
       "paidAt": "2026-09-16T14:11:18.107Z"
     }
   ],
+  "coupons": [
+    {
+      "id": "coup_free2026",
+      "code": "FREE2026",
+      "description": "100% Free TG Enterprise Plan Upgrade",
+      "discountType": "free",
+      "discountValue": 100,
+      "applicablePlanIds": [
+        "plan_ultra",
+        "all"
+      ],
+      "applicableCycle": "all",
+      "maxUses": 0,
+      "usedCount": 0,
+      "expiresAt": null,
+      "active": true,
+      "createdAt": "2026-09-18T13:28:43.246Z",
+      "maxUsesPerUser": 1,
+      "usedUserIds": {}
+    },
+    {
+      "id": "coup_free100",
+      "code": "FREE100",
+      "description": "100% Free Plan Upgrade (No payment required)",
+      "discountType": "free",
+      "discountValue": 100,
+      "applicablePlanIds": [],
+      "applicableCycle": "all",
+      "maxUses": 0,
+      "usedCount": 0,
+      "expiresAt": null,
+      "active": true,
+      "createdAt": "2026-09-18T13:21:08.957Z",
+      "maxUsesPerUser": 1,
+      "usedUserIds": {}
+    },
+    {
+      "id": "coup_thunder50",
+      "code": "THUNDER50",
+      "description": "Special 50% discount on Pro & Enterprise plans",
+      "discountType": "percentage",
+      "discountValue": 50,
+      "applicablePlanIds": [],
+      "applicableCycle": "all",
+      "maxUses": 200,
+      "usedCount": 0,
+      "expiresAt": null,
+      "active": true,
+      "createdAt": "2026-09-18T13:21:08.958Z",
+      "maxUsesPerUser": 1,
+      "usedUserIds": {}
+    }
+  ],
   "publicFiles": [],
   "settings": {
     "siteName": "TG Uploads",
@@ -279,7 +332,7 @@
     "currency": "INR",
     "oxapayApiKey": "",
     "oxapayEnabled": true,
-    "oxapaySandbox": true,
+    "oxapaySandbox": false,
     "customHeadCode": "",
     "adsTxt": "",
     "adsEnabled": true,

@@ -146,7 +146,9 @@ const DEFAULT_COUPONS: Coupon[] = [
     applicablePlanIds: ['plan_ultra', 'all'],
     applicableCycle: 'all',
     maxUses: 0,
+    maxUsesPerUser: 1,
     usedCount: 0,
+    usedUserIds: {},
     expiresAt: null,
     active: true,
     createdAt: new Date().toISOString()
@@ -160,7 +162,9 @@ const DEFAULT_COUPONS: Coupon[] = [
     applicablePlanIds: [],
     applicableCycle: 'all',
     maxUses: 0,
+    maxUsesPerUser: 1,
     usedCount: 0,
+    usedUserIds: {},
     expiresAt: null,
     active: true,
     createdAt: new Date().toISOString()
@@ -174,7 +178,9 @@ const DEFAULT_COUPONS: Coupon[] = [
     applicablePlanIds: [],
     applicableCycle: 'all',
     maxUses: 200,
+    maxUsesPerUser: 1,
     usedCount: 0,
+    usedUserIds: {},
     expiresAt: null,
     active: true,
     createdAt: new Date().toISOString()
@@ -239,7 +245,11 @@ class Database {
 
         const cleanFiles = (parsed.files || []).filter((f: StoredFileItem) => !f.id.startsWith('file_tg_'));
 
-        const initialCoupons = parsed.coupons && Array.isArray(parsed.coupons) ? parsed.coupons : DEFAULT_COUPONS;
+        const initialCoupons = (parsed.coupons && Array.isArray(parsed.coupons) ? parsed.coupons : DEFAULT_COUPONS).map((c: Coupon) => ({
+          ...c,
+          maxUsesPerUser: typeof c.maxUsesPerUser === 'number' ? c.maxUsesPerUser : 1,
+          usedUserIds: c.usedUserIds || {}
+        }));
         if (!initialCoupons.some((c: Coupon) => c.code === 'FREE2026')) {
           initialCoupons.unshift(DEFAULT_COUPONS[0]);
         }
@@ -691,12 +701,37 @@ class Database {
     return false;
   }
 
-  public incrementCouponUses(code: string) {
+  public incrementCouponUses(code: string, userId?: string) {
     const coupon = this.getCouponByCode(code);
     if (coupon) {
       coupon.usedCount = (coupon.usedCount || 0) + 1;
+      if (userId) {
+        if (!coupon.usedUserIds) {
+          coupon.usedUserIds = {};
+        }
+        coupon.usedUserIds[userId] = (coupon.usedUserIds[userId] || 0) + 1;
+      }
       this.persist();
     }
+  }
+
+  public getUserCouponUses(code: string, userId: string): number {
+    if (!code || !userId) return 0;
+    const cleanCode = code.trim().toUpperCase();
+    const coupon = this.getCouponByCode(cleanCode);
+
+    // Count tracked directly in coupon.usedUserIds
+    const recordedInCoupon = (coupon?.usedUserIds && coupon.usedUserIds[userId]) || 0;
+
+    // Cross-check paid orders by this user with this coupon code to be 100% resilient
+    const paidOrdersCount = (this.data.orders || []).filter(
+      o => o.userId === userId && 
+           o.status === 'paid' && 
+           o.couponCode && 
+           o.couponCode.trim().toUpperCase() === cleanCode
+    ).length;
+
+    return Math.max(recordedInCoupon, paidOrdersCount);
   }
 
   // --- Public Root Files (served at /<path>) ---
