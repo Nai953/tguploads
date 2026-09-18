@@ -6,7 +6,7 @@ import multer from 'multer';
 import { Readable } from 'stream';
 import { createServer as createViteServer } from 'vite';
 import { db, hashPassword, verifyPassword, StoredUser, StoredFileItem, UPLOADS_DIR } from './server/db.js';
-import { Plan, PaymentOrder, PublicRootFile } from './src/types.js';
+import { Plan, PaymentOrder, PublicRootFile, Coupon } from './src/types.js';
 import { createOxaPayInvoice, inquireOxaPayPayment, testOxaPayMerchantKey } from './server/oxapay.js';
 
 // TGWebDrive API Configuration
@@ -130,6 +130,57 @@ function activateOrderForUser(order: PaymentOrder) {
     planExpiresAt: newExpiresAt,
     planCycle: order.billingCycle
   });
+
+  if (order.couponCode) {
+    db.incrementCouponUses(order.couponCode);
+  }
+}
+
+// Evaluate Coupon Helper
+function evaluateCoupon(code: string, plan: Plan, cycle: 'monthly' | 'yearly') {
+  if (!code || !code.trim()) return { valid: false, error: 'Coupon code is required' };
+  const cleanCode = code.trim().toUpperCase();
+  const coupon = db.getCouponByCode(cleanCode);
+  if (!coupon) {
+    return { valid: false, error: `Coupon code "${cleanCode}" is invalid` };
+  }
+  if (!coupon.active) {
+    return { valid: false, error: `Coupon code "${cleanCode}" is disabled` };
+  }
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) {
+    return { valid: false, error: `Coupon code "${cleanCode}" has expired` };
+  }
+  if (coupon.maxUses > 0 && (coupon.usedCount || 0) >= coupon.maxUses) {
+    return { valid: false, error: `Coupon code "${cleanCode}" has reached maximum redemptions limit` };
+  }
+  if (coupon.applicablePlanIds && coupon.applicablePlanIds.length > 0 && !coupon.applicablePlanIds.includes(plan.id) && !coupon.applicablePlanIds.includes('all')) {
+    return { valid: false, error: `Coupon "${cleanCode}" is not applicable to the ${plan.name} tier` };
+  }
+  if (coupon.applicableCycle && coupon.applicableCycle !== 'all' && coupon.applicableCycle !== cycle) {
+    return { valid: false, error: `Coupon "${cleanCode}" is only applicable to ${coupon.applicableCycle} billing` };
+  }
+
+  const basePrice = cycle === 'yearly' ? (plan.priceYearly || plan.priceMonthly * 10) : plan.priceMonthly;
+  let discountAmount = 0;
+
+  if (coupon.discountType === 'free' || coupon.discountValue >= 100) {
+    discountAmount = basePrice;
+  } else if (coupon.discountType === 'percentage') {
+    discountAmount = Math.round((basePrice * coupon.discountValue) / 100);
+  } else if (coupon.discountType === 'fixed') {
+    discountAmount = Math.min(basePrice, coupon.discountValue);
+  }
+
+  const finalAmount = Math.max(0, basePrice - discountAmount);
+
+  return {
+    valid: true,
+    coupon,
+    originalAmount: basePrice,
+    discountAmount,
+    finalAmount,
+    isFree: finalAmount === 0
+  };
 }
 
 // Auth Middleware
@@ -343,6 +394,48 @@ app.post('/api/user/upgrade-plan', requireAuth, (req: Request, res: Response) =>
 });
 
 // ==========================================
+// COUPON VALIDATION API
+// ==========================================
+app.post('/api/coupons/validate', requireAuth, (req: Request, res: Response) => {
+  try {
+    const { code, planId, billingCycle } = req.body;
+    if (!code || !code.trim()) {
+      return res.status(400).json({ valid: false, error: 'Please enter a coupon code.' });
+    }
+
+    const plan = planId ? db.getPlanById(planId) : undefined;
+    if (!plan || !plan.active) {
+      return res.status(400).json({ valid: false, error: 'Please select a valid plan first.' });
+    }
+
+    const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const evalRes = evaluateCoupon(code, plan, cycle);
+
+    if (!evalRes.valid) {
+      return res.status(400).json(evalRes);
+    }
+
+    return res.json({
+      valid: true,
+      coupon: {
+        id: evalRes.coupon!.id,
+        code: evalRes.coupon!.code,
+        description: evalRes.coupon!.description,
+        discountType: evalRes.coupon!.discountType,
+        discountValue: evalRes.coupon!.discountValue
+      },
+      originalAmount: evalRes.originalAmount,
+      discountAmount: evalRes.discountAmount,
+      finalAmount: evalRes.finalAmount,
+      isFree: evalRes.isFree
+    });
+  } catch (err: any) {
+    console.error('Error validating coupon:', err);
+    res.status(500).json({ valid: false, error: 'Failed to validate coupon' });
+  }
+});
+
+// ==========================================
 // OXAPAY CRYPTO PAYMENT GATEWAY APIS
 // ==========================================
 
@@ -350,7 +443,7 @@ app.post('/api/user/upgrade-plan', requireAuth, (req: Request, res: Response) =>
 app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as StoredUser;
-    const { planId, billingCycle } = req.body;
+    const { planId, billingCycle, couponCode } = req.body;
 
     const targetPlan = db.getPlanById(planId);
     if (!targetPlan || !targetPlan.active) {
@@ -373,30 +466,74 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
     }
 
     const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const amount = cycle === 'yearly' ? (targetPlan.priceYearly || targetPlan.priceMonthly * 10) : targetPlan.priceMonthly;
+    const baseAmount = cycle === 'yearly' ? (targetPlan.priceYearly || targetPlan.priceMonthly * 10) : targetPlan.priceMonthly;
 
-    // If free plan, activate directly (only allowed for free users)
-    if (amount === 0) {
-      if (isPaidUser) {
+    let discountAmount = 0;
+    let finalAmount = baseAmount;
+    let appliedCoupon: Coupon | null = null;
+
+    if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const evalRes = evaluateCoupon(couponCode, targetPlan, cycle);
+      if (!evalRes.valid) {
+        return res.status(400).json({ error: evalRes.error });
+      }
+      appliedCoupon = evalRes.coupon!;
+      discountAmount = evalRes.discountAmount;
+      finalAmount = evalRes.finalAmount;
+    }
+
+    const settings = db.getSettings();
+    const currency = settings.currency || 'INR';
+
+    // If free plan or coupon made it 100% free!
+    if (finalAmount === 0) {
+      // If user is already paid and trying to activate the zero-dollar free starter plan without a coupon
+      if (baseAmount === 0 && !appliedCoupon && isPaidUser) {
         return res.status(400).json({
           error: 'Paid users cannot downgrade to the Free plan while active. It will automatically revert to Free only if not renewed next month.'
         });
       }
-      const updated = db.updateUser(user.id, { planId: targetPlan.id });
+
+      const orderId = 'ord_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
+      const order: PaymentOrder = {
+        id: orderId,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        planId: targetPlan.id,
+        planName: targetPlan.name,
+        billingCycle: cycle,
+        amount: 0,
+        originalAmount: baseAmount,
+        discountAmount: discountAmount || baseAmount,
+        couponCode: appliedCoupon ? appliedCoupon.code : undefined,
+        currency,
+        status: 'paid',
+        paidAt: new Date().toISOString(),
+        paymentMethod: appliedCoupon ? 'coupon_free' : 'free',
+        createdAt: new Date().toISOString(),
+        description: `TG Uploads: ${targetPlan.name} (${cycle}) - ${appliedCoupon ? `100% Free with Coupon ${appliedCoupon.code}` : 'Free Plan'}`
+      };
+
+      db.addOrder(order);
+      activateOrderForUser(order);
+
+      const updatedUser = db.getUserById(user.id);
       return res.json({
         free: true,
         success: true,
-        message: `Activated ${targetPlan.name} plan successfully`,
-        user: updated ? sanitizeUser(updated) : undefined,
+        orderId,
+        couponApplied: appliedCoupon ? appliedCoupon.code : undefined,
+        message: appliedCoupon 
+          ? `Coupon ${appliedCoupon.code} applied! Your ${targetPlan.name} plan is now activated 100% for free.`
+          : `Activated ${targetPlan.name} plan successfully`,
+        user: updatedUser ? sanitizeUser(updatedUser) : undefined,
         plan: targetPlan
       });
     }
 
-    const settings = db.getSettings();
     const apiKey = (settings.oxapayApiKey || process.env.OXAPAY_API_KEY || '').trim();
-
     const orderId = 'ord_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
-    const currency = settings.currency || 'INR';
 
     const order: PaymentOrder = {
       id: orderId,
@@ -406,11 +543,14 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
       planId: targetPlan.id,
       planName: targetPlan.name,
       billingCycle: cycle,
-      amount,
+      amount: finalAmount,
+      originalAmount: baseAmount,
+      discountAmount,
+      couponCode: appliedCoupon ? appliedCoupon.code : undefined,
       currency,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      description: `TG Uploads Plan: ${targetPlan.name} (${cycle}) - ₹${amount} INR`
+      description: `TG Uploads: ${targetPlan.name} (${cycle}) - ₹${finalAmount} INR${appliedCoupon ? ` (Discount: ₹${discountAmount} via ${appliedCoupon.code})` : ''}`
     };
 
     const host = req.get('host') || 'localhost:3000';
@@ -430,7 +570,10 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
           orderId,
           trackId: order.trackId,
           payLink: order.payLink,
-          amount,
+          amount: finalAmount,
+          originalAmount: baseAmount,
+          discountAmount,
+          couponCode: appliedCoupon ? appliedCoupon.code : undefined,
           currency,
           sandbox: true,
           plan: targetPlan
@@ -444,11 +587,11 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
 
     const invoiceResult = await createOxaPayInvoice({
       apiKey,
-      amount,
+      amount: finalAmount,
       currency,
       orderId,
       email: user.email,
-      description: `TG Uploads: ${targetPlan.name} (${cycle}) - ₹${amount} INR`,
+      description: `TG Uploads: ${targetPlan.name} (${cycle}) - ₹${finalAmount} INR${appliedCoupon ? ` (Discount: ₹${discountAmount} via ${appliedCoupon.code})` : ''}`,
       callbackUrl,
       returnUrl,
       sandbox: settings.oxapaySandbox
@@ -465,7 +608,10 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
           orderId,
           trackId: order.trackId,
           payLink: order.payLink,
-          amount,
+          amount: finalAmount,
+          originalAmount: baseAmount,
+          discountAmount,
+          couponCode: appliedCoupon ? appliedCoupon.code : undefined,
           currency,
           sandbox: true,
           notice: `Live OxaPay returned notice: ${invoiceResult.error}. Using Sandbox simulation mode.`,
@@ -487,7 +633,10 @@ app.post('/api/payments/oxapay/create-invoice', requireAuth, async (req: Request
       orderId,
       trackId: invoiceResult.trackId,
       payLink: invoiceResult.payLink,
-      amount,
+      amount: finalAmount,
+      originalAmount: baseAmount,
+      discountAmount,
+      couponCode: appliedCoupon ? appliedCoupon.code : undefined,
       currency,
       plan: targetPlan
     });
@@ -1390,6 +1539,72 @@ app.post('/api/admin/orders/:id/activate', requireAdmin, (req: Request, res: Res
     message: `Plan "${order.planName}" activated for user ${order.userEmail}`,
     order: db.getOrderById(id)
   });
+});
+
+// Admin: Manage Coupons & Promo Codes
+app.get('/api/admin/coupons', requireAdmin, (req: Request, res: Response) => {
+  res.json(db.getCoupons());
+});
+
+app.post('/api/admin/coupons', requireAdmin, (req: Request, res: Response) => {
+  const { code, description, discountType, discountValue, applicablePlanIds, applicableCycle, maxUses, expiresAt, active } = req.body;
+  if (!code || !code.trim()) {
+    return res.status(400).json({ error: 'Coupon code is required' });
+  }
+
+  const cleanCode = code.trim().toUpperCase();
+  const existing = db.getCouponByCode(cleanCode);
+  if (existing) {
+    return res.status(400).json({ error: `Coupon code "${cleanCode}" already exists` });
+  }
+
+  const type = (discountType === 'fixed' || discountType === 'free') ? discountType : 'percentage';
+  const val = type === 'free' ? 100 : Math.max(0, Number(discountValue) || 0);
+
+  const newCoupon: Coupon = {
+    id: 'coup_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+    code: cleanCode,
+    description: (description || '').trim(),
+    discountType: type,
+    discountValue: val,
+    applicablePlanIds: Array.isArray(applicablePlanIds) ? applicablePlanIds : [],
+    applicableCycle: (applicableCycle === 'monthly' || applicableCycle === 'yearly') ? applicableCycle : 'all',
+    maxUses: Math.max(0, parseInt(String(maxUses)) || 0),
+    usedCount: 0,
+    expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+    active: active !== false,
+    createdAt: new Date().toISOString()
+  };
+
+  db.addCoupon(newCoupon);
+  res.status(201).json(newCoupon);
+});
+
+app.put('/api/admin/coupons/:id', requireAdmin, (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updates: Partial<Coupon> = { ...req.body };
+  if (updates.code) {
+    updates.code = updates.code.trim().toUpperCase();
+  }
+  if (updates.discountType === 'free') {
+    updates.discountValue = 100;
+  }
+  if (updates.expiresAt !== undefined) {
+    updates.expiresAt = updates.expiresAt ? new Date(updates.expiresAt).toISOString() : null;
+  }
+  const updated = db.updateCoupon(id, updates);
+  if (!updated) {
+    return res.status(404).json({ error: 'Coupon not found' });
+  }
+  res.json(updated);
+});
+
+app.delete('/api/admin/coupons/:id', requireAdmin, (req: Request, res: Response) => {
+  const deleted = db.deleteCoupon(req.params.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Coupon not found' });
+  }
+  res.json({ success: true });
 });
 
 // ==========================================

@@ -4,7 +4,6 @@ import {
   Sparkles, 
   Crown, 
   Zap, 
-  ShieldCheck, 
   ArrowRight, 
   HardDrive, 
   Lock, 
@@ -18,6 +17,7 @@ import { Plan, User } from '../types.js';
 import { formatBytes } from '../lib/utils.js';
 import { api } from '../lib/api.js';
 import { OxaPayCheckoutModal } from './OxaPayCheckoutModal.js';
+import { PaymentDetailsPage } from './PaymentDetailsPage.js';
 
 interface PlansSectionProps {
   plans: Plan[];
@@ -106,6 +106,26 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
       setUpgradingId(null);
     }
   };
+
+  // If user selected a plan to purchase/upgrade, show the dedicated Payment Details Page
+  if (checkoutPlan && user) {
+    return (
+      <PaymentDetailsPage
+        plan={checkoutPlan}
+        billingCycle={billingCycle}
+        user={user}
+        onBack={() => setCheckoutPlan(null)}
+        onPlanUpdated={(newPlan, updatedUser) => {
+          if (updatedUser) {
+            onPlanUpdated(newPlan, updatedUser);
+          }
+          setSuccessMessage(`Successfully updated to ${newPlan.name} plan!`);
+          setTimeout(() => setSuccessMessage(null), 6000);
+        }}
+        onOpenAuth={onOpenAuth}
+      />
+    );
+  }
 
   return (
     <div id="plans-section-container" className="max-w-7xl mx-auto space-y-10">
@@ -448,17 +468,6 @@ export const PlansSection: React.FC<PlansSectionProps> = ({
           onNavigateToAdminSettings={onNavigateToAdminSettings}
         />
       )}
-
-      {/* Admin Notice Footer */}
-      <div className="p-6 rounded-3xl bg-slate-900/40 border border-slate-800 text-center max-w-xl mx-auto space-y-2">
-        <div className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-purple-400" />
-          <span>TG Uploads Dynamic Tier Management</span>
-        </div>
-        <p className="text-xs text-slate-400 leading-relaxed">
-          All tier specifications, file thresholds, prices, and default configurations are managed directly in real-time from the Admin Control Panel assigned to <span className="text-purple-300 font-semibold">teamthunderofficialyt@gmail.com</span>.
-        </p>
-      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { User, Plan, FileItem, SiteSettings, AdminStats, PaymentOrder, PublicRootFile } from '../types.js';
+import { User, Plan, FileItem, SiteSettings, AdminStats, PaymentOrder, PublicRootFile, Coupon } from '../types.js';
 
 const TOKEN_KEY = 'tg_auth_token';
 
@@ -76,8 +76,28 @@ export const api = {
       body: JSON.stringify({ planId })
     }),
 
-  // OxaPay Payments
-  createOxaPayInvoice: (planId: string, billingCycle: 'monthly' | 'yearly') =>
+  // OxaPay Payments & Invoicing
+  validateCoupon: (code: string, planId: string, billingCycle: 'monthly' | 'yearly') =>
+    request<{
+      valid: boolean;
+      coupon: {
+        id: string;
+        code: string;
+        description?: string;
+        discountType: 'percentage' | 'fixed' | 'free';
+        discountValue: number;
+      };
+      originalAmount: number;
+      discountAmount: number;
+      finalAmount: number;
+      isFree: boolean;
+      error?: string;
+    }>('/api/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code, planId, billingCycle })
+    }),
+
+  createOxaPayInvoice: (planId: string, billingCycle: 'monthly' | 'yearly', couponCode?: string) =>
     request<{
       success: boolean;
       free?: boolean;
@@ -85,6 +105,9 @@ export const api = {
       trackId?: string | number;
       payLink?: string;
       amount?: number;
+      originalAmount?: number;
+      discountAmount?: number;
+      couponCode?: string;
       currency?: string;
       sandbox?: boolean;
       notice?: string;
@@ -93,7 +116,7 @@ export const api = {
       message?: string;
     }>('/api/payments/oxapay/create-invoice', {
       method: 'POST',
-      body: JSON.stringify({ planId, billingCycle })
+      body: JSON.stringify({ planId, billingCycle, couponCode })
     }),
 
   checkPaymentStatus: (orderId: string) =>
@@ -308,5 +331,22 @@ export const api = {
   adminActivateOrder: (orderId: string) =>
     request<{ success: boolean; message: string; order: PaymentOrder }>(`/api/admin/orders/${orderId}/activate`, {
       method: 'POST'
+    }),
+
+  // Admin: Coupons & Promos
+  adminGetCoupons: () => request<Coupon[]>('/api/admin/coupons'),
+  adminCreateCoupon: (coupon: Partial<Coupon>) =>
+    request<Coupon>('/api/admin/coupons', {
+      method: 'POST',
+      body: JSON.stringify(coupon)
+    }),
+  adminUpdateCoupon: (id: string, updates: Partial<Coupon>) =>
+    request<Coupon>(`/api/admin/coupons/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    }),
+  adminDeleteCoupon: (id: string) =>
+    request<{ success: boolean }>(`/api/admin/coupons/${id}`, {
+      method: 'DELETE'
     })
 };

@@ -90,6 +90,21 @@ export interface PublicRootFile {
   updatedAt: string;
 }
 
+export interface Coupon {
+  id: string;
+  code: string;
+  description?: string;
+  discountType: 'percentage' | 'fixed' | 'free'; // 'free' gives 100% discount
+  discountValue: number; // e.g. 100 for 100%, or fixed amount in INR e.g. 200
+  applicablePlanIds: string[]; // empty array or ['all'] means applicable to all plans
+  applicableCycle: 'all' | 'monthly' | 'yearly';
+  maxUses: number; // 0 = unlimited
+  usedCount: number;
+  expiresAt: string | null; // ISO date string or null
+  active: boolean;
+  createdAt: string;
+}
+
 export interface PaymentOrder {
   id: string; // 'ord_...'
   userId: string;
@@ -98,7 +113,10 @@ export interface PaymentOrder {
   planId: string;
   planName: string;
   billingCycle: 'monthly' | 'yearly';
-  amount: number; // in INR
+  amount: number; // in INR (final amount charged)
+  originalAmount?: number; // original amount before discount
+  discountAmount?: number;
+  couponCode?: string;
   currency: string; // 'INR'
   status: 'pending' | 'paying' | 'paid' | 'expired' | 'failed';
   trackId?: string | number;

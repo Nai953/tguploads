@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { User, Plan, FileItem, SiteSettings, PaymentOrder, PublicRootFile } from '../src/types.js';
+import { User, Plan, FileItem, SiteSettings, PaymentOrder, PublicRootFile, Coupon } from '../src/types.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
@@ -24,6 +24,7 @@ export interface DatabaseSchema {
   plans: Plan[];
   files: StoredFileItem[];
   orders: PaymentOrder[];
+  coupons: Coupon[];
   publicFiles: PublicRootFile[];
   settings: SiteSettings;
   sessions: Record<string, { userId: string; expiresAt: number }>;
@@ -135,6 +136,37 @@ const DEFAULT_SETTINGS: SiteSettings = {
   adDownloadPopunder: ''
 };
 
+const DEFAULT_COUPONS: Coupon[] = [
+  {
+    id: 'coup_free100',
+    code: 'FREE100',
+    description: '100% Free Plan Upgrade (No payment required)',
+    discountType: 'free',
+    discountValue: 100,
+    applicablePlanIds: [],
+    applicableCycle: 'all',
+    maxUses: 0,
+    usedCount: 0,
+    expiresAt: null,
+    active: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'coup_thunder50',
+    code: 'THUNDER50',
+    description: 'Special 50% discount on Pro & Enterprise plans',
+    discountType: 'percentage',
+    discountValue: 50,
+    applicablePlanIds: [],
+    applicableCycle: 'all',
+    maxUses: 200,
+    usedCount: 0,
+    expiresAt: null,
+    active: true,
+    createdAt: new Date().toISOString()
+  }
+];
+
 export function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
   const actualSalt = salt || crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, actualSalt, 1000, 64, 'sha512').toString('hex');
@@ -185,6 +217,7 @@ class Database {
           plans,
           files: cleanFiles,
           orders: parsed.orders || [],
+          coupons: parsed.coupons && Array.isArray(parsed.coupons) ? parsed.coupons : DEFAULT_COUPONS,
           publicFiles: parsed.publicFiles || [],
           settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}), currency: 'INR' },
           sessions: parsed.sessions || {}
@@ -209,6 +242,7 @@ class Database {
       plans: DEFAULT_PLANS,
       files: [],
       orders: [],
+      coupons: DEFAULT_COUPONS,
       publicFiles: [],
       settings: DEFAULT_SETTINGS,
       sessions: {}
@@ -555,6 +589,65 @@ class Database {
     this.data.orders[idx] = { ...this.data.orders[idx], ...updates };
     this.persist();
     return this.data.orders[idx];
+  }
+
+  // --- Coupons & Promos ---
+  public getCoupons(): Coupon[] {
+    return this.data.coupons || [];
+  }
+
+  public getCouponById(id: string): Coupon | undefined {
+    return (this.data.coupons || []).find(c => c.id === id);
+  }
+
+  public getCouponByCode(code: string): Coupon | undefined {
+    if (!code) return undefined;
+    const clean = code.trim().toUpperCase();
+    return (this.data.coupons || []).find(c => c.code.trim().toUpperCase() === clean);
+  }
+
+  public addCoupon(coupon: Coupon): Coupon {
+    if (!this.data.coupons) {
+      this.data.coupons = [];
+    }
+    // Check if code already exists
+    const clean = coupon.code.trim().toUpperCase();
+    const existingIdx = this.data.coupons.findIndex(c => c.code.trim().toUpperCase() === clean);
+    if (existingIdx !== -1) {
+      this.data.coupons[existingIdx] = coupon;
+    } else {
+      this.data.coupons.unshift(coupon);
+    }
+    this.persist();
+    return coupon;
+  }
+
+  public updateCoupon(id: string, updates: Partial<Coupon>): Coupon | null {
+    if (!this.data.coupons) return null;
+    const idx = this.data.coupons.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    this.data.coupons[idx] = { ...this.data.coupons[idx], ...updates };
+    this.persist();
+    return this.data.coupons[idx];
+  }
+
+  public deleteCoupon(id: string): boolean {
+    if (!this.data.coupons) return false;
+    const initialLen = this.data.coupons.length;
+    this.data.coupons = this.data.coupons.filter(c => c.id !== id);
+    if (this.data.coupons.length !== initialLen) {
+      this.persist();
+      return true;
+    }
+    return false;
+  }
+
+  public incrementCouponUses(code: string) {
+    const coupon = this.getCouponByCode(code);
+    if (coupon) {
+      coupon.usedCount = (coupon.usedCount || 0) + 1;
+      this.persist();
+    }
   }
 
   // --- Public Root Files (served at /<path>) ---
